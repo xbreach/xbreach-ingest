@@ -40,6 +40,15 @@ XBREACH_APP_NAME=xbreach-ingest
 XBREACH_APP_VERSION=0.1.0
 XBREACH_ENVIRONMENT=local
 XBREACH_LOG_LEVEL=INFO
+XBREACH_DATA_PATH=/data/xbreach
+XBREACH_POSTGRES_HOST=postgres
+XBREACH_POSTGRES_PORT=5432
+XBREACH_POSTGRES_DB=xbreach
+XBREACH_POSTGRES_USER=xbreach
+XBREACH_POSTGRES_PASSWORD=xbreach
+XBREACH_REDIS_HOST=redis
+XBREACH_REDIS_PORT=6379
+XBREACH_REDIS_DB=0
 ```
 
 ## Executar localmente
@@ -65,7 +74,9 @@ Resposta esperada:
 {
   "status": "ok",
   "environment": "local",
-  "service": "xbreach-ingest"
+  "service": "xbreach-ingest",
+  "postgres": "ok",
+  "redis": "ok"
 }
 ```
 
@@ -77,6 +88,15 @@ docker compose up --build
 
 O Docker Compose usa o `.env` automaticamente quando o arquivo existir e aplica
 valores padrao quando ele nao existir.
+
+O Compose sobe tres servicos na network interna `xbreach-internal`:
+
+- `api`: aplicacao FastAPI exposta em `localhost:8000`
+- `postgres`: PostgreSQL 16 com dados persistidos em `/data/xbreach/postgres`
+- `redis`: Redis 7 com AOF persistido em `/data/xbreach/redis`
+
+Arquivos da aplicacao que precisarem ser persistidos devem usar
+`/data/xbreach/storage`.
 
 ## Testes
 
