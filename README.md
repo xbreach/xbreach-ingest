@@ -83,3 +83,9 @@ valores padrao quando ele nao existir.
 ```bash
 pytest
 ```
+
+## CI
+
+O workflow de CI instala as dependencias de desenvolvimento, executa `pytest`,
+sobe a aplicacao com Uvicorn e valida se `GET /health` responde com
+`{"status":"ok"}`.
