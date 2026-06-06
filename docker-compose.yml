@@ -1,0 +1,16 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      XBREACH_APP_NAME: ${XBREACH_APP_NAME:-xbreach-ingest}
+      XBREACH_APP_VERSION: ${XBREACH_APP_VERSION:-0.1.0}
+      XBREACH_ENVIRONMENT: ${XBREACH_ENVIRONMENT:-local}
+      XBREACH_LOG_LEVEL: ${XBREACH_LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./storage:/app/storage
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
