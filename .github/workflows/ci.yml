@@ -54,6 +54,15 @@ jobs:
       - name: Run tests
         run: pytest
 
+      - name: Run migrations
+        env:
+          XBREACH_POSTGRES_HOST: 127.0.0.1
+          XBREACH_POSTGRES_PORT: 5432
+          XBREACH_POSTGRES_DB: xbreach
+          XBREACH_POSTGRES_USER: xbreach
+          XBREACH_POSTGRES_PASSWORD: xbreach
+        run: python -m app.infrastructure.migrations
+
       - name: Start API
         env:
           XBREACH_POSTGRES_HOST: 127.0.0.1

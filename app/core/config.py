@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     environment: str = "local"
     log_level: str = "INFO"
     data_path: str = "/data/xbreach"
+    app_id: int = 1
+    node_id: int = 1
 
     postgres_host: str = "postgres"
     postgres_port: int = 5432

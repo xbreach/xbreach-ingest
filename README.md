@@ -41,6 +41,8 @@ XBREACH_APP_VERSION=0.1.0
 XBREACH_ENVIRONMENT=local
 XBREACH_LOG_LEVEL=INFO
 XBREACH_DATA_PATH=/data/xbreach
+XBREACH_APP_ID=1
+XBREACH_NODE_ID=1
 XBREACH_POSTGRES_HOST=postgres
 XBREACH_POSTGRES_PORT=5432
 XBREACH_POSTGRES_DB=xbreach
@@ -97,6 +99,28 @@ O Compose sobe tres servicos na network interna `xbreach-internal`:
 
 Arquivos da aplicacao que precisarem ser persistidos devem usar
 `/data/xbreach/storage`.
+
+## Banco de dados
+
+As migrations ficam em `migrations/` e sao aplicadas com:
+
+```bash
+python -m app.infrastructure.migrations
+```
+
+No Docker Compose, a API executa as migrations antes de iniciar o Uvicorn.
+
+A primeira migration cria:
+
+- `sources`
+- `breaches`
+- `ingestion_jobs`
+- `ingestion_job_errors`
+
+Os IDs das tabelas sao `BIGINT` e devem ser gerados pela aplicacao com o
+snowflake comum. O snowflake carrega `XBREACH_APP_ID` e `XBREACH_NODE_ID`; o
+`APP_ID` identifica o tipo de aplicacao que inseriu o dado. Status de sources e
+jobs sao padronizados por constraints no PostgreSQL.
 
 ## Testes
 
