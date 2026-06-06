@@ -3,14 +3,67 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       XBREACH_APP_NAME: ${XBREACH_APP_NAME:-xbreach-ingest}
       XBREACH_APP_VERSION: ${XBREACH_APP_VERSION:-0.1.0}
       XBREACH_ENVIRONMENT: ${XBREACH_ENVIRONMENT:-local}
       XBREACH_LOG_LEVEL: ${XBREACH_LOG_LEVEL:-INFO}
+      XBREACH_DATA_PATH: ${XBREACH_DATA_PATH:-/data/xbreach}
+      XBREACH_POSTGRES_HOST: ${XBREACH_POSTGRES_HOST:-postgres}
+      XBREACH_POSTGRES_PORT: ${XBREACH_POSTGRES_PORT:-5432}
+      XBREACH_POSTGRES_DB: ${XBREACH_POSTGRES_DB:-xbreach}
+      XBREACH_POSTGRES_USER: ${XBREACH_POSTGRES_USER:-xbreach}
+      XBREACH_POSTGRES_PASSWORD: ${XBREACH_POSTGRES_PASSWORD:-xbreach}
+      XBREACH_REDIS_HOST: ${XBREACH_REDIS_HOST:-redis}
+      XBREACH_REDIS_PORT: ${XBREACH_REDIS_PORT:-6379}
+      XBREACH_REDIS_DB: ${XBREACH_REDIS_DB:-0}
     ports:
       - "8000:8000"
     volumes:
       - ./app:/app/app
-      - ./storage:/app/storage
+      - /data/xbreach/storage:/data/xbreach/storage
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - xbreach-internal
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${XBREACH_POSTGRES_DB:-xbreach}
+      POSTGRES_USER: ${XBREACH_POSTGRES_USER:-xbreach}
+      POSTGRES_PASSWORD: ${XBREACH_POSTGRES_PASSWORD:-xbreach}
+    volumes:
+      - /data/xbreach/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - xbreach-internal
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - /data/xbreach/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - xbreach-internal
+
+networks:
+  xbreach-internal:
+    driver: bridge
