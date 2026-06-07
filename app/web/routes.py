@@ -87,11 +87,17 @@ def job_detail(
 
 
 @router.get("/upload", response_class=HTMLResponse)
-def upload(request: Request) -> HTMLResponse:
+def upload(
+    request: Request,
+    session: Session = Depends(get_session_dependency),
+) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "upload.html",
-        {"request": request, "page_title": "Upload"},
+        _upload_context(
+            request=request,
+            sources=_list_sources(session),
+        ),
     )
 
 
@@ -119,3 +125,29 @@ def _count_jobs_by_status(session: Session, status: str) -> int:
         )
         or 0
     )
+
+
+def _list_sources(session: Session) -> list[SourceModel]:
+    return session.scalars(select(SourceModel).order_by(SourceModel.name.asc())).all()
+
+
+def _upload_context(
+    *,
+    request: Request,
+    sources: list[SourceModel],
+    error_message: str | None = None,
+    job_id: int | None = None,
+    selected_source_id: int | None = None,
+    breach_name: str = "",
+    collected_at: str = "",
+) -> dict:
+    return {
+        "request": request,
+        "page_title": "Upload",
+        "sources": sources,
+        "error_message": error_message,
+        "job_id": job_id,
+        "selected_source_id": selected_source_id,
+        "breach_name": breach_name,
+        "collected_at": collected_at,
+    }

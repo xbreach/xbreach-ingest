@@ -2,26 +2,33 @@
 
 {% block content %}
 <section class="panel compact-panel">
-  <form class="form" action="/api/v1/ingest/upload" method="post" enctype="multipart/form-data">
+  <form class="form" action="/upload" method="post" enctype="multipart/form-data">
     <label>
-      File
-      <input type="file" name="file" accept=".txt,.csv,.gz,.zst">
-    </label>
-    <label>
-      Source ID
-      <input type="number" name="source_id" min="1">
+      Source
+      <select name="source_id" required>
+        <option value="">Select source</option>
+        {% for source in sources %}
+        <option value="{{ source.id }}" {% if selected_source_id == source.id %}selected{% endif %}>
+          {{ source.name }} ({{ source.status }})
+        </option>
+        {% endfor %}
+      </select>
     </label>
     <label>
       Breach name
-      <input type="text" name="breach_name">
+      <input type="text" name="breach_name" value="{{ breach_name }}" required>
     </label>
     <label>
       Collected at
-      <input type="datetime-local" name="collected_at">
+      <input type="datetime-local" name="collected_at" value="{{ collected_at }}">
+    </label>
+    <label>
+      File
+      <input type="file" name="file" accept=".txt,.csv,.gz,.zst" required>
     </label>
     <label>
       API key
-      <input type="password" name="x-api-key" autocomplete="off">
+      <input type="password" name="api_key" autocomplete="off" required>
     </label>
     <button type="submit">Upload</button>
   </form>
