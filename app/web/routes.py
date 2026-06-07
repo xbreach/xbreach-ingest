@@ -8,6 +8,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.infrastructure.database import (
+    BreachModel,
+    IngestionJobErrorModel,
     IngestionJobModel,
     SourceModel,
     get_session_dependency,
@@ -128,10 +130,23 @@ def job_detail(
     session: Session = Depends(get_session_dependency),
 ) -> HTMLResponse:
     job = session.get(IngestionJobModel, job_id)
+    source = session.get(SourceModel, job.source_id) if job else None
+    breach = session.get(BreachModel, job.breach_id) if job and job.breach_id else None
+    error_summary = _job_error_summary(session, job_id) if job else []
+    recent_errors = _recent_job_errors(session, job_id) if job else []
     return templates.TemplateResponse(
         request,
         "job_detail.html",
-        {"request": request, "page_title": f"Job {job_id}", "job": job},
+        {
+            "request": request,
+            "page_title": f"Job {job_id}",
+            "job": job,
+            "source": source,
+            "breach": breach,
+            "error_summary": error_summary,
+            "recent_errors": recent_errors,
+            "progress_percent": _job_progress_percent(job),
+        },
         status_code=200 if job else 404,
     )
 
@@ -228,6 +243,36 @@ def _count_jobs_by_status(session: Session, status: str) -> int:
         )
         or 0
     )
+
+
+def _job_error_summary(session: Session, job_id: int):
+    statement = (
+        select(
+            IngestionJobErrorModel.error_type,
+            func.count(IngestionJobErrorModel.id).label("total"),
+        )
+        .where(IngestionJobErrorModel.job_id == job_id)
+        .group_by(IngestionJobErrorModel.error_type)
+        .order_by(func.count(IngestionJobErrorModel.id).desc())
+    )
+    return session.execute(statement).all()
+
+
+def _recent_job_errors(session: Session, job_id: int) -> list[IngestionJobErrorModel]:
+    statement = (
+        select(IngestionJobErrorModel)
+        .where(IngestionJobErrorModel.job_id == job_id)
+        .order_by(IngestionJobErrorModel.created_at.desc())
+        .limit(10)
+    )
+    return list(session.scalars(statement).all())
+
+
+def _job_progress_percent(job: IngestionJobModel | None) -> int:
+    if job is None or job.total_lines <= 0:
+        return 0
+    processed_lines = min(job.parsed_lines + job.rejected_lines, job.total_lines)
+    return round((processed_lines / job.total_lines) * 100)
 
 
 def _list_sources(session: Session) -> list[SourceModel]:

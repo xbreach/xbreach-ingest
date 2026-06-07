@@ -77,6 +77,21 @@ class IngestionJobModel(Base):
     )
 
 
+class IngestionJobErrorModel(Base):
+    __tablename__ = "ingestion_job_errors"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    job_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    line_number: Mapped[int | None] = mapped_column(BigInteger)
+    error_type: Mapped[str] = mapped_column(Text, nullable=False)
+    error_message: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
 def build_database_url() -> str:
     settings = get_settings()
     return (

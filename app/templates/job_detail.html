@@ -2,26 +2,50 @@
 
 {% block content %}
 {% if job %}
+<section class="panel job-progress-panel">
+  <div class="section-header">
+    <h2>Progress</h2>
+    <span class="status status-{{ job.status }}">{{ job.status }}</span>
+  </div>
+  <div class="progress-track" aria-label="Job progress">
+    <div class="progress-fill" style="width: {{ progress_percent }}%"></div>
+  </div>
+  <div class="progress-meta">
+    <span>{{ progress_percent }}% processed</span>
+    <span>{{ job.parsed_lines + job.rejected_lines }} / {{ job.total_lines }} lines</span>
+  </div>
+</section>
+
 <section class="detail-grid">
   <article class="panel">
     <h2>Job details</h2>
     <dl>
-      <dt>ID</dt>
+      <dt>Job ID</dt>
       <dd>{{ job.id }}</dd>
       <dt>Source</dt>
-      <dd>{{ job.source_id }}</dd>
+      <dd>{{ source.name if source else job.source_id }}</dd>
+      <dt>Breach</dt>
+      <dd>{{ breach.name if breach else job.breach_id or "None" }}</dd>
       <dt>Status</dt>
-      <dd><span class="status">{{ job.status }}</span></dd>
-      <dt>Original filename</dt>
+      <dd><span class="status status-{{ job.status }}">{{ job.status }}</span></dd>
+      <dt>Filename</dt>
       <dd>{{ job.original_filename }}</dd>
-      <dt>Stored filename</dt>
-      <dd>{{ job.stored_filename }}</dd>
+      <dt>Checksum</dt>
+      <dd>{{ job.checksum_sha256 }}</dd>
+      <dt>Path</dt>
+      <dd>{{ job.local_path }}</dd>
       <dt>File size</dt>
       <dd>{{ job.file_size_bytes }} bytes</dd>
+      <dt>Created at</dt>
+      <dd>{{ job.created_at }}</dd>
+      <dt>Started at</dt>
+      <dd>{{ job.started_at or "Not started" }}</dd>
+      <dt>Finished at</dt>
+      <dd>{{ job.finished_at or "Not finished" }}</dd>
     </dl>
   </article>
   <article class="panel">
-    <h2>Progress</h2>
+    <h2>Line counts</h2>
     <dl>
       <dt>Total lines</dt>
       <dd>{{ job.total_lines }}</dd>
@@ -31,9 +55,65 @@
       <dd>{{ job.rejected_lines }}</dd>
       <dt>Inserted lines</dt>
       <dd>{{ job.inserted_lines }}</dd>
-      <dt>Error</dt>
-      <dd>{{ job.error_message or "None" }}</dd>
     </dl>
+  </article>
+</section>
+
+<section class="detail-grid">
+  <article class="panel">
+    <div class="section-header">
+      <h2>Error summary</h2>
+      <span class="result-count">{{ error_summary | length }} types</span>
+    </div>
+    {% if error_summary %}
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for error_type, total in error_summary %}
+        <tr>
+          <td>{{ error_type }}</td>
+          <td>{{ total }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No job errors recorded.</p>
+    {% endif %}
+  </article>
+
+  <article class="panel">
+    <div class="section-header">
+      <h2>Latest failures</h2>
+      <span class="result-count">{{ recent_errors | length }} shown</span>
+    </div>
+    {% if recent_errors %}
+    <table>
+      <thead>
+        <tr>
+          <th>Line</th>
+          <th>Type</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for error in recent_errors %}
+        <tr>
+          <td>{{ error.line_number or "File" }}</td>
+          <td>{{ error.error_type }}</td>
+          <td>{{ error.created_at }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No recent failures.</p>
+    {% endif %}
   </article>
 </section>
 {% else %}
