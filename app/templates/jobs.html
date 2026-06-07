@@ -1,30 +1,100 @@
 {% extends "base.html" %}
 
 {% block content %}
+<section class="panel filters-panel">
+  <form class="filters-form" action="/jobs" method="get">
+    <label>
+      Status
+      <select name="status">
+        <option value="">All statuses</option>
+        {% for option in status_options %}
+        <option value="{{ option }}" {% if filters.status == option %}selected{% endif %}>
+          {{ option }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Source
+      <select name="source_id">
+        <option value="">All sources</option>
+        {% for source in sources %}
+        <option value="{{ source.id }}" {% if filters.source_id == source.id %}selected{% endif %}>
+          {{ source.name }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      From
+      <input type="date" name="date_from" value="{{ filters.date_from or '' }}">
+    </label>
+    <label>
+      To
+      <input type="date" name="date_to" value="{{ filters.date_to or '' }}">
+    </label>
+    <label>
+      Filename
+      <input type="search" name="filename" value="{{ filters.filename or '' }}">
+    </label>
+    <div class="filter-actions">
+      <button type="submit">Apply</button>
+      <a class="secondary-action" href="/jobs">Clear</a>
+    </div>
+  </form>
+</section>
+
 <section class="panel">
+  <div class="section-header">
+    <h2>Job listing</h2>
+    <span class="result-count">{{ total_jobs }} jobs</span>
+  </div>
   {% if jobs %}
   <table>
     <thead>
       <tr>
-        <th>Job</th>
+        <th>Job ID</th>
         <th>Source</th>
         <th>Filename</th>
         <th>Status</th>
-        <th>Progress</th>
+        <th>File size</th>
+        <th>Parsed</th>
+        <th>Rejected</th>
+        <th>Inserted</th>
+        <th>Created</th>
+        <th>Updated</th>
       </tr>
     </thead>
     <tbody>
       {% for job in jobs %}
       <tr>
         <td><a href="/jobs/{{ job.id }}">{{ job.id }}</a></td>
-        <td>{{ job.source_id }}</td>
+        <td>{{ source_names.get(job.source_id, job.source_id) }}</td>
         <td>{{ job.original_filename }}</td>
-        <td><span class="status">{{ job.status }}</span></td>
-        <td>{{ job.parsed_lines }} / {{ job.total_lines }}</td>
+        <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
+        <td>{{ job.file_size_bytes }} bytes</td>
+        <td>{{ job.parsed_lines }}</td>
+        <td>{{ job.rejected_lines }}</td>
+        <td>{{ job.inserted_lines }}</td>
+        <td>{{ job.created_at }}</td>
+        <td>{{ job.updated_at }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  <nav class="pagination" aria-label="Job pages">
+    {% if previous_page_url %}
+    <a class="secondary-action" href="{{ previous_page_url }}">Previous</a>
+    {% else %}
+    <span class="secondary-action disabled">Previous</span>
+    {% endif %}
+    <span>Page {{ page }} of {{ total_pages }}</span>
+    {% if next_page_url %}
+    <a class="secondary-action" href="{{ next_page_url }}">Next</a>
+    {% else %}
+    <span class="secondary-action disabled">Next</span>
+    {% endif %}
+  </nav>
   {% else %}
   <p class="empty">No ingestion jobs yet.</p>
   {% endif %}

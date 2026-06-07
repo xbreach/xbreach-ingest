@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -17,6 +17,9 @@ from app.repositories.ingestion_jobs import IngestionJobRepository
 from app.repositories.sources import SourceRepository
 from app.services.sources import SourceAccessError
 from app.services.upload import UploadIngestService, UploadValidationError
+
+JOB_LISTING_PAGE_SIZE = 20
+JOB_STATUS_OPTIONS = ["pending", "running", "completed", "failed"]
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
@@ -65,15 +68,56 @@ def dashboard(
 @router.get("/jobs", response_class=HTMLResponse)
 def jobs(
     request: Request,
+    status: str | None = None,
+    source_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    filename: str | None = None,
+    page: int = Query(1, ge=1),
     session: Session = Depends(get_session_dependency),
 ) -> HTMLResponse:
+    filters = JobListingFilters(
+        status=status,
+        source_id=source_id,
+        date_from=date_from,
+        date_to=date_to,
+        filename=filename.strip() if filename else None,
+    )
+    statement = _filtered_jobs_statement(filters)
+    total_jobs = session.scalar(
+        select(func.count()).select_from(statement.subquery())
+    ) or 0
+    total_pages = max(1, (total_jobs + JOB_LISTING_PAGE_SIZE - 1) // JOB_LISTING_PAGE_SIZE)
+    current_page = min(page, total_pages)
     job_rows = session.scalars(
-        select(IngestionJobModel).order_by(IngestionJobModel.created_at.desc()).limit(50)
+        statement.offset((current_page - 1) * JOB_LISTING_PAGE_SIZE).limit(
+            JOB_LISTING_PAGE_SIZE
+        )
     ).all()
+    sources = session.scalars(select(SourceModel).order_by(SourceModel.name.asc())).all()
+    source_names = {source.id: source.name for source in sources}
     return templates.TemplateResponse(
         request,
         "jobs.html",
-        {"request": request, "page_title": "Jobs", "jobs": job_rows},
+        {
+            "request": request,
+            "page_title": "Jobs",
+            "jobs": job_rows,
+            "sources": sources,
+            "source_names": source_names,
+            "status_options": JOB_STATUS_OPTIONS,
+            "filters": filters,
+            "page": current_page,
+            "page_size": JOB_LISTING_PAGE_SIZE,
+            "total_jobs": total_jobs,
+            "total_pages": total_pages,
+            "previous_page_url": _jobs_page_url(request, current_page - 1)
+            if current_page > 1
+            else None,
+            "next_page_url": _jobs_page_url(request, current_page + 1)
+            if current_page < total_pages
+            else None,
+        },
     )
 
 
@@ -243,3 +287,60 @@ def _parse_collected_at(collected_at: str):
     if not collected_at:
         return None
     return datetime.fromisoformat(collected_at)
+
+
+class JobListingFilters:
+    def __init__(
+        self,
+        *,
+        status: str | None,
+        source_id: int | None,
+        date_from: date | None,
+        date_to: date | None,
+        filename: str | None,
+    ) -> None:
+        self.status = status
+        self.source_id = source_id
+        self.date_from = date_from
+        self.date_to = date_to
+        self.filename = filename
+
+
+def _filtered_jobs_statement(filters: JobListingFilters):
+    statement = select(IngestionJobModel)
+
+    if filters.status:
+        statement = statement.where(IngestionJobModel.status == filters.status)
+    if filters.source_id:
+        statement = statement.where(IngestionJobModel.source_id == filters.source_id)
+    if filters.date_from:
+        statement = statement.where(
+            IngestionJobModel.created_at >= _start_of_day(filters.date_from)
+        )
+    if filters.date_to:
+        statement = statement.where(
+            IngestionJobModel.created_at <= _end_of_day(filters.date_to)
+        )
+    if filters.filename:
+        statement = statement.where(
+            IngestionJobModel.original_filename.ilike(f"%{filters.filename}%")
+        )
+
+    return statement.order_by(
+        IngestionJobModel.created_at.desc(),
+        IngestionJobModel.id.desc(),
+    )
+
+
+def _jobs_page_url(request: Request, page: int) -> str:
+    params = dict(request.query_params)
+    params["page"] = str(page)
+    return str(request.url.include_query_params(**params))
+
+
+def _start_of_day(value: date) -> datetime:
+    return datetime.combine(value, time.min, tzinfo=UTC)
+
+
+def _end_of_day(value: date) -> datetime:
+    return datetime.combine(value, time.max, tzinfo=UTC)
