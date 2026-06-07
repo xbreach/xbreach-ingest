@@ -31,6 +31,21 @@ class SourceModel(Base):
     )
 
 
+class BreachModel(Base):
+    __tablename__ = "breaches"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    source_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
 class IngestionJobModel(Base):
     __tablename__ = "ingestion_jobs"
 
@@ -78,3 +93,11 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 def get_session() -> Session:
     return SessionLocal()
+
+
+def get_session_dependency():
+    session = get_session()
+    try:
+        yield session
+    finally:
+        session.close()
