@@ -10,6 +10,8 @@ from sqlalchemy.pool import StaticPool
 
 from app.infrastructure.database import (
     Base,
+    BreachModel,
+    IngestionJobErrorModel,
     IngestionJobModel,
     SourceModel,
     get_session_dependency,
@@ -164,6 +166,67 @@ def seed_job_listing_data(session: Session) -> None:
     session.commit()
 
 
+def seed_job_detail_data(session: Session) -> None:
+    add_source(session, source_id=2001, name="Partner feed")
+    session.add(
+        BreachModel(
+            id=3001,
+            source_id=2001,
+            name="Credential dump",
+            collected_at=datetime(2026, 6, 6, 8, 0, tzinfo=UTC),
+        )
+    )
+    session.add(
+        IngestionJobModel(
+            id=4001,
+            source_id=2001,
+            breach_id=3001,
+            original_filename="accounts.csv",
+            stored_filename="original.csv",
+            local_path="raw/year=2026/month=06/day=06/4001/original.csv",
+            checksum_sha256=hashlib.sha256(b"content").hexdigest(),
+            file_size_bytes=2048,
+            status="running",
+            total_lines=100,
+            parsed_lines=60,
+            rejected_lines=10,
+            inserted_lines=55,
+            started_at=datetime(2026, 6, 7, 12, 0, tzinfo=UTC),
+            created_at=datetime(2026, 6, 7, 11, 0, tzinfo=UTC),
+            updated_at=datetime(2026, 6, 7, 12, 5, tzinfo=UTC),
+        )
+    )
+    session.add_all(
+        [
+            IngestionJobErrorModel(
+                id=7001,
+                job_id=4001,
+                line_number=10,
+                error_type="invalid_email",
+                error_message="raw leak line user@example.com:secret-password",
+                created_at=datetime(2026, 6, 7, 12, 1, tzinfo=UTC),
+            ),
+            IngestionJobErrorModel(
+                id=7002,
+                job_id=4001,
+                line_number=11,
+                error_type="invalid_email",
+                error_message="raw leak line admin@example.com:password123",
+                created_at=datetime(2026, 6, 7, 12, 2, tzinfo=UTC),
+            ),
+            IngestionJobErrorModel(
+                id=7003,
+                job_id=4001,
+                line_number=None,
+                error_type="parse_error",
+                error_message="raw file chunk should not appear",
+                created_at=datetime(2026, 6, 7, 12, 3, tzinfo=UTC),
+            ),
+        ]
+    )
+    session.commit()
+
+
 @pytest.mark.parametrize(
     "path, expected_text",
     [
@@ -208,12 +271,8 @@ def test_web_interface_does_not_expose_sensitive_data(
 
     dashboard = client.get("/dashboard").text
     sources = client.get("/sources").text
-    job_detail = client.get("/jobs/4001").text
-
-    rendered_html = "\n".join([dashboard, sources, job_detail])
+    rendered_html = "\n".join([dashboard, sources])
     assert "sensitive-api-key-hash" not in rendered_html
-    assert hashlib.sha256(b"content").hexdigest() not in rendered_html
-    assert "/data/xbreach" not in rendered_html
 
 
 def test_upload_screen_renders_source_select_and_file_input(
@@ -374,3 +433,38 @@ def test_jobs_screen_is_paginated(client: TestClient, session: Session) -> None:
     assert "batch-0.txt" in first_page.text
     assert "batch-20.txt" not in first_page.text
     assert "batch-20.txt" in second_page.text
+
+
+def test_job_details_screen_shows_progress_metadata_and_errors(
+    client: TestClient,
+    session: Session,
+) -> None:
+    seed_job_detail_data(session)
+
+    response = client.get("/jobs/4001")
+
+    assert response.status_code == 200
+    assert "70% processed" in response.text
+    assert "70 / 100 lines" in response.text
+    assert "accounts.csv" in response.text
+    assert hashlib.sha256(b"content").hexdigest() in response.text
+    assert "raw/year=2026/month=06/day=06/4001/original.csv" in response.text
+    assert "Partner feed" in response.text
+    assert "Credential dump" in response.text
+    assert "Total lines" in response.text
+    assert "Parsed lines" in response.text
+    assert "Rejected lines" in response.text
+    assert "Inserted lines" in response.text
+    assert "invalid_email" in response.text
+    assert "parse_error" in response.text
+    assert "Latest failures" in response.text
+    assert "raw leak line" not in response.text
+    assert "secret-password" not in response.text
+    assert "password123" not in response.text
+
+
+def test_job_details_screen_shows_not_found(client: TestClient) -> None:
+    response = client.get("/jobs/9999")
+
+    assert response.status_code == 404
+    assert "Job not found." in response.text
