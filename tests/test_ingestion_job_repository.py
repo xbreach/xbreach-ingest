@@ -78,6 +78,16 @@ def test_find_by_id_returns_job(session: Session) -> None:
     assert job.id == 1001
 
 
+def test_find_by_checksum_sha256_returns_first_matching_job(session: Session) -> None:
+    add_job(session, 1001)
+    repository = IngestionJobRepository(session)
+
+    job = repository.find_by_checksum_sha256(str(1001).zfill(64))
+
+    assert job is not None
+    assert job.id == 1001
+
+
 def test_find_pending_jobs_returns_oldest_pending_jobs(session: Session) -> None:
     add_job(session, 1001, JOB_STATUS_COMPLETED)
     add_job(session, 1002, JOB_STATUS_PENDING)

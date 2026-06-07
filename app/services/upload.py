@@ -1,4 +1,5 @@
 import hashlib
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -17,6 +18,18 @@ from app.schemas.ingestion_job import CreateIngestionJob
 from app.services.sources import InvalidApiKeyError, SourceService
 
 ALLOWED_UPLOAD_SUFFIXES = {".txt", ".csv", ".gz", ".zst"}
+ALLOWED_CONTENT_TYPES_BY_SUFFIX = {
+    ".txt": {"text/plain", "application/octet-stream"},
+    ".csv": {
+        "text/csv",
+        "application/vnd.ms-excel",
+        "text/plain",
+        "application/octet-stream",
+    },
+    ".gz": {"application/gzip", "application/x-gzip", "application/octet-stream"},
+    ".zst": {"application/zstd", "application/octet-stream"},
+}
+SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 @dataclass(frozen=True)
@@ -30,9 +43,24 @@ class InvalidUploadExtensionError(UploadValidationError):
         super().__init__("file extension is not allowed", 400)
 
 
+class InvalidUploadContentTypeError(UploadValidationError):
+    def __init__(self) -> None:
+        super().__init__("file content type is not allowed", 400)
+
+
 class EmptyUploadFileError(UploadValidationError):
     def __init__(self) -> None:
         super().__init__("uploaded file is empty", 400)
+
+
+class UploadFileTooLargeError(UploadValidationError):
+    def __init__(self) -> None:
+        super().__init__("uploaded file exceeds the maximum allowed size", 413)
+
+
+class UnsafeUploadFilenameError(UploadValidationError):
+    def __init__(self) -> None:
+        super().__init__("uploaded filename is not safe", 400)
 
 
 class SourceMismatchError(UploadValidationError):
@@ -48,6 +76,7 @@ class UploadIngestService:
         job_repository: IngestionJobRepository,
         id_generator: Callable[[], int] | None = None,
         storage_path: Path | None = None,
+        max_file_size_bytes: int | None = None,
     ) -> None:
         settings = get_settings()
         self._source_service = SourceService(source_repository)
@@ -58,6 +87,11 @@ class UploadIngestService:
             node_id=settings.node_id,
         ).next_id
         self._storage_path = storage_path or Path(settings.data_path) / "storage"
+        self._max_file_size_bytes = (
+            max_file_size_bytes
+            if max_file_size_bytes is not None
+            else settings.upload_max_file_size_bytes
+        )
 
     def upload(
         self,
@@ -69,6 +103,7 @@ class UploadIngestService:
         api_key: str,
     ) -> int:
         self._validate_extension(file.filename)
+        self._validate_content_type(file.filename, file.content_type)
 
         api_key_hash = self._hash_api_key(api_key)
         source = self._source_service.authenticate_by_api_key_hash(api_key_hash)
@@ -76,6 +111,13 @@ class UploadIngestService:
             raise SourceMismatchError()
 
         saved_file = self._save_file(file)
+        existing_job = self._job_repository.find_by_checksum_sha256(
+            saved_file.checksum_sha256
+        )
+        if existing_job is not None:
+            saved_file.local_path.unlink(missing_ok=True)
+            return existing_job.id
+
         breach_id = self._id_generator()
         job_id = self._id_generator()
 
@@ -103,7 +145,7 @@ class UploadIngestService:
 
     def _save_file(self, file: UploadFile):
         self._storage_path.mkdir(parents=True, exist_ok=True)
-        original_filename = Path(file.filename or "").name
+        original_filename = self._sanitize_filename(file.filename)
         stored_filename = f"{uuid4().hex}{Path(original_filename).suffix.lower()}"
         local_path = self._storage_path / stored_filename
         checksum = hashlib.sha256()
@@ -112,6 +154,10 @@ class UploadIngestService:
         with local_path.open("wb") as output:
             while chunk := file.file.read(1024 * 1024):
                 file_size_bytes += len(chunk)
+                if file_size_bytes > self._max_file_size_bytes:
+                    output.close()
+                    local_path.unlink(missing_ok=True)
+                    raise UploadFileTooLargeError()
                 checksum.update(chunk)
                 output.write(chunk)
 
@@ -133,6 +179,26 @@ class UploadIngestService:
         suffix = Path(filename or "").suffix.lower()
         if suffix not in ALLOWED_UPLOAD_SUFFIXES:
             raise InvalidUploadExtensionError()
+
+    @staticmethod
+    def _validate_content_type(filename: str | None, content_type: str | None) -> None:
+        suffix = Path(filename or "").suffix.lower()
+        allowed_content_types = ALLOWED_CONTENT_TYPES_BY_SUFFIX.get(suffix, set())
+        if content_type not in allowed_content_types:
+            raise InvalidUploadContentTypeError()
+
+    @staticmethod
+    def _sanitize_filename(filename: str | None) -> str:
+        if not filename:
+            raise UnsafeUploadFilenameError()
+        if "/" in filename or "\\" in filename:
+            raise UnsafeUploadFilenameError()
+
+        name = Path(filename).name.strip().strip(".")
+        sanitized = SAFE_FILENAME_PATTERN.sub("_", name)
+        if not sanitized or Path(sanitized).suffix.lower() not in ALLOWED_UPLOAD_SUFFIXES:
+            raise UnsafeUploadFilenameError()
+        return sanitized
 
     @staticmethod
     def _hash_api_key(api_key: str) -> str:
