@@ -38,6 +38,16 @@ class IngestionJobRepository:
         model = self._session.get(IngestionJobModel, job_id)
         return self._to_entity(model) if model else None
 
+    def find_by_checksum_sha256(self, checksum_sha256: str) -> IngestionJob | None:
+        statement = (
+            select(IngestionJobModel)
+            .where(IngestionJobModel.checksum_sha256 == checksum_sha256)
+            .order_by(IngestionJobModel.created_at.asc())
+            .limit(1)
+        )
+        model = self._session.scalar(statement)
+        return self._to_entity(model) if model else None
+
     def find_pending_jobs(
         self,
         limit: int,

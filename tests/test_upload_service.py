@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from fastapi import UploadFile
+from starlette.datastructures import Headers
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -18,8 +19,15 @@ from app.repositories.breaches import BreachRepository
 from app.repositories.ingestion_jobs import IngestionJobRepository
 from app.repositories.sources import SourceRepository
 from app.services.sources import InactiveSourceError, InvalidApiKeyError
-from app.services.upload import EmptyUploadFileError, InvalidUploadExtensionError
-from app.services.upload import SourceMismatchError, UploadIngestService
+from app.services.upload import (
+    EmptyUploadFileError,
+    InvalidUploadContentTypeError,
+    InvalidUploadExtensionError,
+    SourceMismatchError,
+    UnsafeUploadFilenameError,
+    UploadFileTooLargeError,
+    UploadIngestService,
+)
 
 
 @pytest.fixture()
@@ -51,10 +59,18 @@ def add_source(
     session.commit()
 
 
-def upload_file(filename: str, content: bytes) -> UploadFile:
+def upload_file(
+    filename: str,
+    content: bytes,
+    content_type: str = "text/plain",
+) -> UploadFile:
     from io import BytesIO
 
-    return UploadFile(filename=filename, file=BytesIO(content))
+    return UploadFile(
+        filename=filename,
+        file=BytesIO(content),
+        headers=Headers({"content-type": content_type}),
+    )
 
 
 def service(session: Session, tmp_path: Path) -> UploadIngestService:
@@ -77,7 +93,7 @@ def test_upload_creates_breach_job_and_saves_file(
     add_source(session)
 
     job_id = service(session, tmp_path).upload(
-        file=upload_file(filename, b"email,password\n"),
+        file=upload_file(filename, b"email,password\n", content_type_for(filename)),
         source_id=2001,
         breach_name="sample breach",
         collected_at=None,
@@ -97,6 +113,25 @@ def test_upload_creates_breach_job_and_saves_file(
     assert Path(job.local_path).read_bytes() == b"email,password\n"
 
 
+def test_upload_sanitizes_malicious_but_local_filename(
+    session: Session,
+    tmp_path: Path,
+) -> None:
+    add_source(session)
+
+    job_id = service(session, tmp_path).upload(
+        file=upload_file("bad name;$!.txt", b"content"),
+        source_id=2001,
+        breach_name="sample breach",
+        collected_at=None,
+        api_key="secret",
+    )
+
+    job = session.get(IngestionJobModel, job_id)
+    assert job is not None
+    assert job.original_filename == "bad_name_.txt"
+
+
 def test_upload_rejects_invalid_extension(session: Session, tmp_path: Path) -> None:
     add_source(session)
 
@@ -110,12 +145,68 @@ def test_upload_rejects_invalid_extension(session: Session, tmp_path: Path) -> N
         )
 
 
+def test_upload_rejects_invalid_content_type(session: Session, tmp_path: Path) -> None:
+    add_source(session)
+
+    with pytest.raises(InvalidUploadContentTypeError):
+        service(session, tmp_path).upload(
+            file=upload_file("input.txt", b"content", "image/png"),
+            source_id=2001,
+            breach_name="sample breach",
+            collected_at=None,
+            api_key="secret",
+        )
+
+
+def test_upload_rejects_path_traversal_filename(
+    session: Session,
+    tmp_path: Path,
+) -> None:
+    add_source(session)
+
+    with pytest.raises(UnsafeUploadFilenameError):
+        service(session, tmp_path).upload(
+            file=upload_file("../input.txt", b"content"),
+            source_id=2001,
+            breach_name="sample breach",
+            collected_at=None,
+            api_key="secret",
+        )
+
+
 def test_upload_rejects_empty_file(session: Session, tmp_path: Path) -> None:
     add_source(session)
 
     with pytest.raises(EmptyUploadFileError):
         service(session, tmp_path).upload(
             file=upload_file("input.txt", b""),
+            source_id=2001,
+            breach_name="sample breach",
+            collected_at=None,
+            api_key="secret",
+        )
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_upload_rejects_file_larger_than_configured_limit(
+    session: Session,
+    tmp_path: Path,
+) -> None:
+    add_source(session)
+    ids = iter([3001, 4001])
+    upload_service = UploadIngestService(
+        source_repository=SourceRepository(session),
+        breach_repository=BreachRepository(session),
+        job_repository=IngestionJobRepository(session),
+        id_generator=lambda: next(ids),
+        storage_path=tmp_path,
+        max_file_size_bytes=3,
+    )
+
+    with pytest.raises(UploadFileTooLargeError):
+        upload_service.upload(
+            file=upload_file("input.txt", b"content"),
             source_id=2001,
             breach_name="sample breach",
             collected_at=None,
@@ -166,3 +257,40 @@ def test_upload_rejects_inactive_source(session: Session, tmp_path: Path) -> Non
         )
 
     assert session.query(IngestionJobModel).count() == 0
+
+
+def test_upload_duplicate_checksum_returns_existing_job_without_creating_new_job(
+    session: Session,
+    tmp_path: Path,
+) -> None:
+    add_source(session)
+    first_job_id = service(session, tmp_path).upload(
+        file=upload_file("first.txt", b"same content"),
+        source_id=2001,
+        breach_name="first breach",
+        collected_at=None,
+        api_key="secret",
+    )
+
+    second_job_id = service(session, tmp_path).upload(
+        file=upload_file("second.txt", b"same content"),
+        source_id=2001,
+        breach_name="second breach",
+        collected_at=None,
+        api_key="secret",
+    )
+
+    assert second_job_id == first_job_id
+    assert session.query(IngestionJobModel).count() == 1
+    assert session.query(BreachModel).count() == 1
+    assert len(list(tmp_path.iterdir())) == 1
+
+
+def content_type_for(filename: str) -> str:
+    if filename.endswith(".csv"):
+        return "text/csv"
+    if filename.endswith(".gz"):
+        return "application/gzip"
+    if filename.endswith(".zst"):
+        return "application/zstd"
+    return "text/plain"
