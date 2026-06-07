@@ -14,6 +14,7 @@ from app.infrastructure.database import (
     get_session_dependency,
 )
 from app.main import app
+from app.services.upload import InvalidUploadExtensionError, UploadIngestResult
 
 
 @pytest.fixture()
@@ -118,3 +119,83 @@ def test_web_interface_does_not_expose_sensitive_data(
     assert "sensitive-api-key-hash" not in rendered_html
     assert hashlib.sha256(b"content").hexdigest() not in rendered_html
     assert "/data/xbreach" not in rendered_html
+
+
+def test_upload_screen_renders_source_select_and_file_input(
+    client: TestClient,
+    session: Session,
+) -> None:
+    seed_operational_data(session)
+
+    response = client.get("/upload")
+
+    assert response.status_code == 200
+    assert 'action="/upload"' in response.text
+    assert 'method="post"' in response.text
+    assert 'enctype="multipart/form-data"' in response.text
+    assert 'select name="source_id"' in response.text
+    assert 'input type="file" name="file"' in response.text
+    assert "Partner feed" in response.text
+
+
+def test_upload_screen_submits_multipart_and_shows_job_id(
+    client: TestClient,
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed_operational_data(session)
+    calls = []
+
+    def fake_upload(self, **kwargs) -> UploadIngestResult:
+        calls.append(kwargs)
+        return UploadIngestResult(
+            job_id=9001,
+            file_path="raw/year=2026/month=06/day=07/9001/original.txt",
+        )
+
+    monkeypatch.setattr("app.services.upload.UploadIngestService.upload", fake_upload)
+
+    response = client.post(
+        "/upload",
+        data={
+            "source_id": "2001",
+            "breach_name": "sample breach",
+            "collected_at": "2026-06-07T12:30",
+            "api_key": "secret",
+        },
+        files={"file": ("input.txt", b"content", "text/plain")},
+    )
+
+    assert response.status_code == 200
+    assert "Upload created job 9001." in response.text
+    assert calls[0]["source_id"] == 2001
+    assert calls[0]["breach_name"] == "sample breach"
+    assert calls[0]["api_key"] == "secret"
+    assert calls[0]["file"].filename == "input.txt"
+
+
+def test_upload_screen_shows_validation_error(
+    client: TestClient,
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed_operational_data(session)
+
+    def fake_upload(self, **kwargs) -> UploadIngestResult:
+        raise InvalidUploadExtensionError()
+
+    monkeypatch.setattr("app.services.upload.UploadIngestService.upload", fake_upload)
+
+    response = client.post(
+        "/upload",
+        data={
+            "source_id": "2001",
+            "breach_name": "sample breach",
+            "api_key": "secret",
+        },
+        files={"file": ("input.exe", b"content", "application/octet-stream")},
+    )
+
+    assert response.status_code == 400
+    assert "file extension is not allowed" in response.text
+    assert "sample breach" in response.text

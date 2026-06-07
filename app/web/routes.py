@@ -1,6 +1,7 @@
+from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -11,6 +12,11 @@ from app.infrastructure.database import (
     SourceModel,
     get_session_dependency,
 )
+from app.repositories.breaches import BreachRepository
+from app.repositories.ingestion_jobs import IngestionJobRepository
+from app.repositories.sources import SourceRepository
+from app.services.sources import SourceAccessError
+from app.services.upload import UploadIngestService, UploadValidationError
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
@@ -87,11 +93,70 @@ def job_detail(
 
 
 @router.get("/upload", response_class=HTMLResponse)
-def upload(request: Request) -> HTMLResponse:
+def upload(
+    request: Request,
+    session: Session = Depends(get_session_dependency),
+) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "upload.html",
-        {"request": request, "page_title": "Upload"},
+        _upload_context(
+            request=request,
+            sources=_list_sources(session),
+        ),
+    )
+
+
+@router.post("/upload", response_class=HTMLResponse)
+def submit_upload(
+    request: Request,
+    source_id: int = Form(...),
+    breach_name: str = Form(...),
+    collected_at: str = Form(""),
+    api_key: str = Form(...),
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session_dependency),
+) -> HTMLResponse:
+    upload_service = UploadIngestService(
+        source_repository=SourceRepository(session),
+        breach_repository=BreachRepository(session),
+        job_repository=IngestionJobRepository(session),
+    )
+    try:
+        parsed_collected_at = _parse_collected_at(collected_at)
+        result = upload_service.upload(
+            file=file,
+            source_id=source_id,
+            breach_name=breach_name,
+            collected_at=parsed_collected_at,
+            api_key=api_key,
+        )
+    except ValueError:
+        return _upload_response(
+            request=request,
+            session=session,
+            error_message="collected at must be a valid datetime",
+            status_code=400,
+            selected_source_id=source_id,
+            breach_name=breach_name,
+            collected_at=collected_at,
+        )
+    except (SourceAccessError, UploadValidationError) as exc:
+        return _upload_response(
+            request=request,
+            session=session,
+            error_message=exc.message,
+            status_code=exc.status_code,
+            selected_source_id=source_id,
+            breach_name=breach_name,
+            collected_at=collected_at,
+        )
+
+    return _upload_response(
+        request=request,
+        session=session,
+        job_id=result.job_id,
+        selected_source_id=source_id,
     )
 
 
@@ -119,3 +184,62 @@ def _count_jobs_by_status(session: Session, status: str) -> int:
         )
         or 0
     )
+
+
+def _list_sources(session: Session) -> list[SourceModel]:
+    return session.scalars(select(SourceModel).order_by(SourceModel.name.asc())).all()
+
+
+def _upload_context(
+    *,
+    request: Request,
+    sources: list[SourceModel],
+    error_message: str | None = None,
+    job_id: int | None = None,
+    selected_source_id: int | None = None,
+    breach_name: str = "",
+    collected_at: str = "",
+) -> dict:
+    return {
+        "request": request,
+        "page_title": "Upload",
+        "sources": sources,
+        "error_message": error_message,
+        "job_id": job_id,
+        "selected_source_id": selected_source_id,
+        "breach_name": breach_name,
+        "collected_at": collected_at,
+    }
+
+
+def _upload_response(
+    *,
+    request: Request,
+    session: Session,
+    error_message: str | None = None,
+    job_id: int | None = None,
+    status_code: int = 200,
+    selected_source_id: int | None = None,
+    breach_name: str = "",
+    collected_at: str = "",
+) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "upload.html",
+        _upload_context(
+            request=request,
+            sources=_list_sources(session),
+            error_message=error_message,
+            job_id=job_id,
+            selected_source_id=selected_source_id,
+            breach_name=breach_name,
+            collected_at=collected_at,
+        ),
+        status_code=status_code,
+    )
+
+
+def _parse_collected_at(collected_at: str):
+    if not collected_at:
+        return None
+    return datetime.fromisoformat(collected_at)
