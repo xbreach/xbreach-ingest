@@ -34,7 +34,7 @@ def upload_file(
     upload_service: UploadIngestService = Depends(get_upload_service),
 ) -> UploadIngestResponse:
     try:
-        job_id = upload_service.upload(
+        result = upload_service.upload(
             file=file,
             source_id=source_id,
             breach_name=breach_name,
@@ -44,4 +44,4 @@ def upload_file(
     except (SourceAccessError, UploadValidationError) as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
-    return UploadIngestResponse(job_id=job_id)
+    return UploadIngestResponse(job_id=result.job_id, file_path=result.file_path)

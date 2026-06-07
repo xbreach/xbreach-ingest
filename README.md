@@ -94,12 +94,12 @@ valores padrao quando ele nao existir.
 
 O Compose sobe tres servicos na network interna `xbreach-internal`:
 
-- `api`: aplicacao FastAPI exposta em `localhost:8000`
+- `api`: aplicacao FastAPI exposta em `localhost:8000`, com arquivos em `/data/xbreach`
 - `postgres`: PostgreSQL 16 com dados persistidos em `/data/xbreach/postgres`
 - `redis`: Redis 7 com AOF persistido em `/data/xbreach/redis`
 
-Arquivos da aplicacao que precisarem ser persistidos devem usar
-`/data/xbreach/storage`.
+Uploads locais sao salvos em `/data/xbreach/raw/year=YYYY/month=MM/day=DD/{job_id}/`
+com o arquivo `original.<ext>` e o `manifest.json`.
 
 ## Banco de dados
 

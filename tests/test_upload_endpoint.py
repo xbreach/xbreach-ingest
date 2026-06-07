@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from app.api.upload import get_upload_service
 from app.main import app
 from app.services.sources import InvalidApiKeyError
-from app.services.upload import InvalidUploadExtensionError
+from app.services.upload import InvalidUploadExtensionError, UploadIngestResult
 
 
 class FakeUploadService:
@@ -11,11 +11,14 @@ class FakeUploadService:
         self.error = error
         self.calls = []
 
-    def upload(self, **kwargs) -> int:
+    def upload(self, **kwargs) -> UploadIngestResult:
         self.calls.append(kwargs)
         if self.error:
             raise self.error
-        return 12345
+        return UploadIngestResult(
+            job_id=12345,
+            file_path="raw/year=2026/month=01/day=01/12345/original.txt",
+        )
 
 
 def test_upload_endpoint_returns_job_id() -> None:
@@ -36,7 +39,10 @@ def test_upload_endpoint_returns_job_id() -> None:
 
     app.dependency_overrides.clear()
     assert response.status_code == 200
-    assert response.json() == {"job_id": 12345}
+    assert response.json() == {
+        "job_id": 12345,
+        "file_path": "raw/year=2026/month=01/day=01/12345/original.txt",
+    }
     assert fake_service.calls[0]["source_id"] == 2001
     assert fake_service.calls[0]["api_key"] == "secret"
 

@@ -1,12 +1,14 @@
 import hashlib
+import json
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from fastapi import UploadFile
-from starlette.datastructures import Headers
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.datastructures import Headers
 
 from app.domain.source import SOURCE_STATUS_ACTIVE, SOURCE_STATUS_INACTIVE
 from app.infrastructure.database import (
@@ -26,8 +28,11 @@ from app.services.upload import (
     SourceMismatchError,
     UnsafeUploadFilenameError,
     UploadFileTooLargeError,
+    UploadIngestResult,
     UploadIngestService,
 )
+
+COLLECTED_AT = datetime(2026, 6, 6, tzinfo=UTC)
 
 
 @pytest.fixture()
@@ -92,25 +97,47 @@ def test_upload_creates_breach_job_and_saves_file(
 ) -> None:
     add_source(session)
 
-    job_id = service(session, tmp_path).upload(
+    result = service(session, tmp_path).upload(
         file=upload_file(filename, b"email,password\n", content_type_for(filename)),
         source_id=2001,
         breach_name="sample breach",
-        collected_at=None,
+        collected_at=COLLECTED_AT,
         api_key="secret",
     )
 
     breach = session.get(BreachModel, 3001)
     job = session.get(IngestionJobModel, 4001)
-    assert job_id == 4001
+    expected_relative_path = (
+        Path("raw")
+        / "year=2026"
+        / "month=06"
+        / "day=06"
+        / "4001"
+        / f"original{Path(filename).suffix}"
+    )
+    expected_absolute_path = tmp_path / expected_relative_path
+    assert result == UploadIngestResult(
+        job_id=4001,
+        file_path=expected_relative_path.as_posix(),
+    )
     assert breach is not None
     assert breach.name == "sample breach"
     assert job is not None
     assert job.source_id == 2001
     assert job.breach_id == 3001
+    assert job.local_path == expected_relative_path.as_posix()
     assert job.file_size_bytes == len(b"email,password\n")
-    assert Path(job.local_path).exists()
-    assert Path(job.local_path).read_bytes() == b"email,password\n"
+    assert expected_absolute_path.exists()
+    assert expected_absolute_path.read_bytes() == b"email,password\n"
+
+    manifest_path = expected_absolute_path.parent / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest == {
+        "job_id": 4001,
+        "checksum": hashlib.sha256(b"email,password\n").hexdigest(),
+        "filename": filename,
+        "size": len(b"email,password\n"),
+    }
 
 
 def test_upload_sanitizes_malicious_but_local_filename(
@@ -119,17 +146,18 @@ def test_upload_sanitizes_malicious_but_local_filename(
 ) -> None:
     add_source(session)
 
-    job_id = service(session, tmp_path).upload(
+    result = service(session, tmp_path).upload(
         file=upload_file("bad name;$!.txt", b"content"),
         source_id=2001,
         breach_name="sample breach",
-        collected_at=None,
+        collected_at=COLLECTED_AT,
         api_key="secret",
     )
 
-    job = session.get(IngestionJobModel, job_id)
+    job = session.get(IngestionJobModel, result.job_id)
     assert job is not None
     assert job.original_filename == "bad_name_.txt"
+    assert job.local_path.endswith("/original.txt")
 
 
 def test_upload_rejects_invalid_extension(session: Session, tmp_path: Path) -> None:
@@ -264,23 +292,23 @@ def test_upload_duplicate_checksum_returns_existing_job_without_creating_new_job
     tmp_path: Path,
 ) -> None:
     add_source(session)
-    first_job_id = service(session, tmp_path).upload(
+    first_result = service(session, tmp_path).upload(
         file=upload_file("first.txt", b"same content"),
         source_id=2001,
         breach_name="first breach",
-        collected_at=None,
+        collected_at=COLLECTED_AT,
         api_key="secret",
     )
 
-    second_job_id = service(session, tmp_path).upload(
+    second_result = service(session, tmp_path).upload(
         file=upload_file("second.txt", b"same content"),
         source_id=2001,
         breach_name="second breach",
-        collected_at=None,
+        collected_at=COLLECTED_AT,
         api_key="secret",
     )
 
-    assert second_job_id == first_job_id
+    assert second_result == first_result
     assert session.query(IngestionJobModel).count() == 1
     assert session.query(BreachModel).count() == 1
     assert len(list(tmp_path.iterdir())) == 1
