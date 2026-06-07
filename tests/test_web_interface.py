@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -273,6 +273,71 @@ def test_web_interface_does_not_expose_sensitive_data(
     sources = client.get("/sources").text
     rendered_html = "\n".join([dashboard, sources])
     assert "sensitive-api-key-hash" not in rendered_html
+
+
+def test_sources_screen_lists_sources_without_api_key_hash(
+    client: TestClient,
+    session: Session,
+) -> None:
+    seed_operational_data(session)
+
+    response = client.get("/sources")
+
+    assert response.status_code == 200
+    assert "Partner feed" in response.text
+    assert "active" in response.text
+    assert "Created at" in response.text
+    assert "sensitive-api-key-hash" not in response.text
+
+
+def test_sources_screen_creates_source_and_shows_api_key_once(
+    client: TestClient,
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.web.routes.secrets.token_urlsafe",
+        lambda size: "plain-api-key",
+    )
+
+    response = client.post(
+        "/sources",
+        data={"name": "New feed", "type": "api", "status": "active"},
+    )
+
+    source = session.scalar(select(SourceModel).where(SourceModel.name == "New feed"))
+    assert response.status_code == 200
+    assert "source created" in response.text
+    assert "plain-api-key" in response.text
+    assert source is not None
+    assert source.api_key_hash == hashlib.sha256(b"plain-api-key").hexdigest()
+    assert source.api_key_hash != "plain-api-key"
+
+    follow_up = client.get("/sources")
+    assert "New feed" in follow_up.text
+    assert "plain-api-key" not in follow_up.text
+    assert source.api_key_hash not in follow_up.text
+
+
+def test_sources_screen_toggles_source_status(
+    client: TestClient,
+    session: Session,
+) -> None:
+    seed_operational_data(session)
+
+    deactivate = client.post("/sources/2001/toggle")
+    session.expire_all()
+    source = session.get(SourceModel, 2001)
+    assert deactivate.status_code == 200
+    assert source is not None
+    assert source.status == "inactive"
+
+    activate = client.post("/sources/2001/toggle")
+    session.expire_all()
+    source = session.get(SourceModel, 2001)
+    assert activate.status_code == 200
+    assert source is not None
+    assert source.status == "active"
 
 
 def test_upload_screen_renders_source_select_and_file_input(
