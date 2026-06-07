@@ -1,15 +1,16 @@
 import hashlib
 import re
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from uuid import uuid4
 
 from fastapi import UploadFile
 
 from app.core.config import get_settings
 from app.domain.snowflake import SnowflakeGenerator
+from app.infrastructure.local_storage import LocalStorage, LocalStorageError
 from app.repositories.breaches import BreachRepository
 from app.repositories.ingestion_jobs import IngestionJobRepository
 from app.repositories.sources import SourceRepository
@@ -68,6 +69,17 @@ class SourceMismatchError(UploadValidationError):
         super().__init__("invalid API key", 401)
 
 
+class UploadStorageError(UploadValidationError):
+    def __init__(self) -> None:
+        super().__init__("failed to write file to local storage", 500)
+
+
+@dataclass(frozen=True)
+class UploadIngestResult:
+    job_id: int
+    file_path: str
+
+
 class UploadIngestService:
     def __init__(
         self,
@@ -86,7 +98,7 @@ class UploadIngestService:
             app_id=settings.app_id,
             node_id=settings.node_id,
         ).next_id
-        self._storage_path = storage_path or Path(settings.data_path) / "storage"
+        self._local_storage = LocalStorage(storage_path or Path(settings.data_path))
         self._max_file_size_bytes = (
             max_file_size_bytes
             if max_file_size_bytes is not None
@@ -101,7 +113,7 @@ class UploadIngestService:
         breach_name: str,
         collected_at: datetime | None,
         api_key: str,
-    ) -> int:
+    ) -> UploadIngestResult:
         self._validate_extension(file.filename)
         self._validate_content_type(file.filename, file.content_type)
 
@@ -110,16 +122,32 @@ class UploadIngestService:
         if source.id != source_id:
             raise SourceMismatchError()
 
-        saved_file = self._save_file(file)
+        staged_file = self._stage_file(file)
         existing_job = self._job_repository.find_by_checksum_sha256(
-            saved_file.checksum_sha256
+            staged_file.checksum_sha256
         )
         if existing_job is not None:
-            saved_file.local_path.unlink(missing_ok=True)
-            return existing_job.id
+            staged_file.temp_path.unlink(missing_ok=True)
+            return UploadIngestResult(
+                job_id=existing_job.id,
+                file_path=existing_job.local_path,
+            )
 
         breach_id = self._id_generator()
         job_id = self._id_generator()
+        try:
+            stored_file = self._local_storage.save(
+                job_id=job_id,
+                original_filename=staged_file.original_filename,
+                source_path=staged_file.temp_path,
+                checksum_sha256=staged_file.checksum_sha256,
+                file_size_bytes=staged_file.file_size_bytes,
+                collected_date=self._storage_date(collected_at),
+            )
+        except LocalStorageError as exc:
+            raise UploadStorageError() from exc
+        finally:
+            staged_file.temp_path.unlink(missing_ok=True)
 
         breach = self._breach_repository.create_breach(
             CreateBreach(
@@ -134,42 +162,48 @@ class UploadIngestService:
                 id=job_id,
                 source_id=source_id,
                 breach_id=breach.id,
-                original_filename=saved_file.original_filename,
-                stored_filename=saved_file.stored_filename,
-                local_path=str(saved_file.local_path),
-                checksum_sha256=saved_file.checksum_sha256,
-                file_size_bytes=saved_file.file_size_bytes,
+                original_filename=stored_file.original_filename,
+                stored_filename=stored_file.stored_filename,
+                local_path=stored_file.relative_path.as_posix(),
+                checksum_sha256=stored_file.checksum_sha256,
+                file_size_bytes=stored_file.file_size_bytes,
             )
         )
-        return job_id
+        return UploadIngestResult(
+            job_id=job_id,
+            file_path=stored_file.relative_path.as_posix(),
+        )
 
-    def _save_file(self, file: UploadFile):
-        self._storage_path.mkdir(parents=True, exist_ok=True)
+    def _stage_file(self, file: UploadFile):
         original_filename = self._sanitize_filename(file.filename)
-        stored_filename = f"{uuid4().hex}{Path(original_filename).suffix.lower()}"
-        local_path = self._storage_path / stored_filename
         checksum = hashlib.sha256()
         file_size_bytes = 0
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_path = Path(temp_file.name)
 
-        with local_path.open("wb") as output:
-            while chunk := file.file.read(1024 * 1024):
-                file_size_bytes += len(chunk)
-                if file_size_bytes > self._max_file_size_bytes:
-                    output.close()
-                    local_path.unlink(missing_ok=True)
-                    raise UploadFileTooLargeError()
-                checksum.update(chunk)
-                output.write(chunk)
+        try:
+            with temp_file:
+                while chunk := file.file.read(1024 * 1024):
+                    file_size_bytes += len(chunk)
+                    if file_size_bytes > self._max_file_size_bytes:
+                        raise UploadFileTooLargeError()
+                    checksum.update(chunk)
+                    temp_file.write(chunk)
+        except UploadValidationError:
+            temp_path.unlink(missing_ok=True)
+            raise
+        except OSError as exc:
+            temp_path.unlink(missing_ok=True)
+            raise UploadStorageError() from exc
 
         if file_size_bytes == 0:
-            local_path.unlink(missing_ok=True)
+            temp_path.unlink(missing_ok=True)
             raise EmptyUploadFileError()
 
         file.file.seek(0)
-        return SavedUploadFile(
+        return StagedUploadFile(
             original_filename=original_filename,
-            stored_filename=stored_filename,
-            local_path=local_path,
+            temp_path=temp_path,
             checksum_sha256=checksum.hexdigest(),
             file_size_bytes=file_size_bytes,
         )
@@ -206,11 +240,16 @@ class UploadIngestService:
             raise InvalidApiKeyError()
         return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
 
+    @staticmethod
+    def _storage_date(collected_at: datetime | None):
+        if collected_at is None:
+            return datetime.now(UTC).date()
+        return collected_at.date()
+
 
 @dataclass(frozen=True)
-class SavedUploadFile:
+class StagedUploadFile:
     original_filename: str
-    stored_filename: str
-    local_path: Path
+    temp_path: Path
     checksum_sha256: str
     file_size_bytes: int
