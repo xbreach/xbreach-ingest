@@ -2,6 +2,12 @@
 
 {% block content %}
 <section class="panel compact-panel">
+  {% if error_message %}
+  <div class="notice error" role="alert">{{ error_message }}</div>
+  {% endif %}
+  {% if job_id %}
+  <div class="notice success" role="status">Upload created job {{ job_id }}.</div>
+  {% endif %}
   <form class="form" action="/upload" method="post" enctype="multipart/form-data">
     <label>
       Source

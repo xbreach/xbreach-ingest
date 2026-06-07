@@ -210,6 +210,25 @@ tr:last-child td {
   color: var(--muted);
 }
 
+.notice {
+  margin-bottom: 16px;
+  border-radius: 6px;
+  padding: 12px;
+  font-weight: 700;
+}
+
+.notice.error {
+  border: 1px solid #f5c2c7;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+.notice.success {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
 .form {
   display: grid;
   gap: 14px;
