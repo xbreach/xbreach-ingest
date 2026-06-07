@@ -1,5 +1,6 @@
 import hashlib
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -65,6 +66,100 @@ def seed_operational_data(session: Session) -> None:
             rejected_lines=1,
             inserted_lines=2,
         )
+    )
+    session.commit()
+
+
+def add_source(
+    session: Session,
+    *,
+    source_id: int,
+    name: str,
+    status: str = "active",
+) -> None:
+    session.add(
+        SourceModel(
+            id=source_id,
+            name=name,
+            type="api",
+            status=status,
+            api_key_hash=f"{source_id}-api-key-hash",
+        )
+    )
+
+
+def add_job(
+    session: Session,
+    *,
+    job_id: int,
+    source_id: int,
+    filename: str,
+    status: str,
+    created_at: datetime,
+    file_size_bytes: int = 100,
+    parsed_lines: int = 10,
+    rejected_lines: int = 1,
+    inserted_lines: int = 9,
+) -> None:
+    session.add(
+        IngestionJobModel(
+            id=job_id,
+            source_id=source_id,
+            breach_id=job_id - 1000,
+            original_filename=filename,
+            stored_filename="original.txt",
+            local_path=f"raw/year=2026/month=06/day=07/{job_id}/original.txt",
+            checksum_sha256=hashlib.sha256(str(job_id).encode("utf-8")).hexdigest(),
+            file_size_bytes=file_size_bytes,
+            status=status,
+            total_lines=parsed_lines + rejected_lines,
+            parsed_lines=parsed_lines,
+            rejected_lines=rejected_lines,
+            inserted_lines=inserted_lines,
+            created_at=created_at,
+            updated_at=created_at + timedelta(minutes=5),
+        )
+    )
+
+
+def seed_job_listing_data(session: Session) -> None:
+    add_source(session, source_id=2001, name="Partner feed")
+    add_source(session, source_id=2002, name="Internal import")
+    add_job(
+        session,
+        job_id=4001,
+        source_id=2001,
+        filename="alpha.txt",
+        status="pending",
+        created_at=datetime(2026, 6, 5, 10, 0, tzinfo=UTC),
+        file_size_bytes=512,
+        parsed_lines=3,
+        rejected_lines=1,
+        inserted_lines=2,
+    )
+    add_job(
+        session,
+        job_id=4002,
+        source_id=2002,
+        filename="beta.csv",
+        status="completed",
+        created_at=datetime(2026, 6, 7, 10, 0, tzinfo=UTC),
+        file_size_bytes=2048,
+        parsed_lines=20,
+        rejected_lines=0,
+        inserted_lines=20,
+    )
+    add_job(
+        session,
+        job_id=4003,
+        source_id=2001,
+        filename="gamma.txt",
+        status="failed",
+        created_at=datetime(2026, 6, 6, 10, 0, tzinfo=UTC),
+        file_size_bytes=1024,
+        parsed_lines=12,
+        rejected_lines=4,
+        inserted_lines=8,
     )
     session.commit()
 
@@ -199,3 +294,83 @@ def test_upload_screen_shows_validation_error(
     assert response.status_code == 400
     assert "file extension is not allowed" in response.text
     assert "sample breach" in response.text
+
+
+def test_jobs_screen_lists_expected_columns_and_recent_jobs_first(
+    client: TestClient,
+    session: Session,
+) -> None:
+    seed_job_listing_data(session)
+
+    response = client.get("/jobs")
+
+    assert response.status_code == 200
+    for heading in [
+        "Job ID",
+        "Source",
+        "Filename",
+        "Status",
+        "File size",
+        "Parsed",
+        "Rejected",
+        "Inserted",
+        "Created",
+        "Updated",
+    ]:
+        assert heading in response.text
+    assert response.text.index("4002") < response.text.index("4003")
+    assert response.text.index("4003") < response.text.index("4001")
+    assert "Internal import" in response.text
+    assert "2048 bytes" in response.text
+    assert "status-completed" in response.text
+    assert "status-failed" in response.text
+
+
+def test_jobs_screen_filters_by_status_source_date_range_and_filename(
+    client: TestClient,
+    session: Session,
+) -> None:
+    seed_job_listing_data(session)
+
+    response = client.get(
+        "/jobs",
+        params={
+            "status": "failed",
+            "source_id": "2001",
+            "date_from": "2026-06-06",
+            "date_to": "2026-06-06",
+            "filename": "gamma",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "4003" in response.text
+    assert "gamma.txt" in response.text
+    assert "4001" not in response.text
+    assert "4002" not in response.text
+
+
+def test_jobs_screen_is_paginated(client: TestClient, session: Session) -> None:
+    add_source(session, source_id=2001, name="Partner feed")
+    base_time = datetime(2026, 6, 7, 12, 0, tzinfo=UTC)
+    for index in range(25):
+        add_job(
+            session,
+            job_id=5000 + index,
+            source_id=2001,
+            filename=f"batch-{index}.txt",
+            status="pending",
+            created_at=base_time - timedelta(minutes=index),
+        )
+    session.commit()
+
+    first_page = client.get("/jobs")
+    second_page = client.get("/jobs", params={"page": "2"})
+
+    assert first_page.status_code == 200
+    assert second_page.status_code == 200
+    assert "Page 1 of 2" in first_page.text
+    assert "Page 2 of 2" in second_page.text
+    assert "batch-0.txt" in first_page.text
+    assert "batch-20.txt" not in first_page.text
+    assert "batch-20.txt" in second_page.text
