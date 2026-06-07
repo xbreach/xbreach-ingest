@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel compact-panel">
+  <form class="form" action="/api/v1/ingest/upload" method="post" enctype="multipart/form-data">
+    <label>
+      File
+      <input type="file" name="file" accept=".txt,.csv,.gz,.zst">
+    </label>
+    <label>
+      Source ID
+      <input type="number" name="source_id" min="1">
+    </label>
+    <label>
+      Breach name
+      <input type="text" name="breach_name">
+    </label>
+    <label>
+      Collected at
+      <input type="datetime-local" name="collected_at">
+    </label>
+    <label>
+      API key
+      <input type="password" name="x-api-key" autocomplete="off">
+    </label>
+    <button type="submit">Upload</button>
+  </form>
+</section>
+{% endblock %}

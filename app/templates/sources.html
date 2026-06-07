@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+  {% if sources %}
+  <table>
+    <thead>
+      <tr>
+        <th>Source</th>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for source in sources %}
+      <tr>
+        <td>{{ source.id }}</td>
+        <td>{{ source.name }}</td>
+        <td>{{ source.type }}</td>
+        <td><span class="status">{{ source.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No sources configured.</p>
+  {% endif %}
+</section>
+{% endblock %}

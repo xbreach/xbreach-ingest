@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% if job %}
+<section class="detail-grid">
+  <article class="panel">
+    <h2>Job details</h2>
+    <dl>
+      <dt>ID</dt>
+      <dd>{{ job.id }}</dd>
+      <dt>Source</dt>
+      <dd>{{ job.source_id }}</dd>
+      <dt>Status</dt>
+      <dd><span class="status">{{ job.status }}</span></dd>
+      <dt>Original filename</dt>
+      <dd>{{ job.original_filename }}</dd>
+      <dt>Stored filename</dt>
+      <dd>{{ job.stored_filename }}</dd>
+      <dt>File size</dt>
+      <dd>{{ job.file_size_bytes }} bytes</dd>
+    </dl>
+  </article>
+  <article class="panel">
+    <h2>Progress</h2>
+    <dl>
+      <dt>Total lines</dt>
+      <dd>{{ job.total_lines }}</dd>
+      <dt>Parsed lines</dt>
+      <dd>{{ job.parsed_lines }}</dd>
+      <dt>Rejected lines</dt>
+      <dd>{{ job.rejected_lines }}</dd>
+      <dt>Inserted lines</dt>
+      <dd>{{ job.inserted_lines }}</dd>
+      <dt>Error</dt>
+      <dd>{{ job.error_message or "None" }}</dd>
+    </dl>
+  </article>
+</section>
+{% else %}
+<section class="panel">
+  <p class="empty">Job not found.</p>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+  {% if jobs %}
+  <table>
+    <thead>
+      <tr>
+        <th>Job</th>
+        <th>Source</th>
+        <th>Filename</th>
+        <th>Status</th>
+        <th>Progress</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for job in jobs %}
+      <tr>
+        <td><a href="/jobs/{{ job.id }}">{{ job.id }}</a></td>
+        <td>{{ job.source_id }}</td>
+        <td>{{ job.original_filename }}</td>
+        <td><span class="status">{{ job.status }}</span></td>
+        <td>{{ job.parsed_lines }} / {{ job.total_lines }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No ingestion jobs yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

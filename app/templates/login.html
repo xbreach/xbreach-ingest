@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel compact-panel">
+  <form class="form" action="/dashboard" method="get">
+    <label>
+      Email
+      <input type="email" name="email" autocomplete="email">
+    </label>
+    <label>
+      Password
+      <input type="password" name="password" autocomplete="current-password">
+    </label>
+    <button type="submit">Continue</button>
+  </form>
+</section>
+{% endblock %}
