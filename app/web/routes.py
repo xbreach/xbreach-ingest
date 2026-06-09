@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import UTC, date, datetime, time
 from pathlib import Path
 
@@ -5,8 +7,12 @@ from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
+from app.domain.snowflake import SnowflakeGenerator
+from app.domain.source import SOURCE_STATUS_ACTIVE, SOURCE_STATUS_INACTIVE
 from app.infrastructure.database import (
     BreachModel,
     IngestionJobErrorModel,
@@ -22,6 +28,7 @@ from app.services.upload import UploadIngestService, UploadValidationError
 
 JOB_LISTING_PAGE_SIZE = 20
 JOB_STATUS_OPTIONS = ["pending", "running", "completed", "failed"]
+SOURCE_STATUS_OPTIONS = ["active", "inactive", "disabled"]
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
@@ -224,13 +231,83 @@ def sources(
     request: Request,
     session: Session = Depends(get_session_dependency),
 ) -> HTMLResponse:
-    source_rows = session.scalars(
-        select(SourceModel).order_by(SourceModel.created_at.desc()).limit(50)
-    ).all()
-    return templates.TemplateResponse(
-        request,
-        "sources.html",
-        {"request": request, "page_title": "Sources", "sources": source_rows},
+    return _sources_response(request=request, session=session)
+
+
+@router.post("/sources", response_class=HTMLResponse)
+def create_source(
+    request: Request,
+    name: str = Form(...),
+    type: str = Form(...),
+    status: str = Form(SOURCE_STATUS_ACTIVE),
+    session: Session = Depends(get_session_dependency),
+) -> HTMLResponse:
+    name = name.strip()
+    source_type = type.strip()
+    if not name or not source_type or status not in SOURCE_STATUS_OPTIONS:
+        return _sources_response(
+            request=request,
+            session=session,
+            error_message="source name, type and status are required",
+            status_code=400,
+            form_values={"name": name, "type": source_type, "status": status},
+        )
+
+    api_key = secrets.token_urlsafe(32)
+    source = SourceModel(
+        id=_next_source_id(),
+        name=name,
+        type=source_type,
+        status=status,
+        api_key_hash=_hash_api_key(api_key),
+    )
+    session.add(source)
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        return _sources_response(
+            request=request,
+            session=session,
+            error_message="failed to create source",
+            status_code=409,
+            form_values={"name": name, "type": source_type, "status": status},
+        )
+
+    return _sources_response(
+        request=request,
+        session=session,
+        success_message="source created",
+        created_api_key=api_key,
+    )
+
+
+@router.post("/sources/{source_id}/toggle", response_class=HTMLResponse)
+def toggle_source_status(
+    source_id: int,
+    request: Request,
+    session: Session = Depends(get_session_dependency),
+) -> HTMLResponse:
+    source = session.get(SourceModel, source_id)
+    if source is None:
+        return _sources_response(
+            request=request,
+            session=session,
+            error_message="source not found",
+            status_code=404,
+        )
+
+    source.status = (
+        SOURCE_STATUS_INACTIVE
+        if source.status == SOURCE_STATUS_ACTIVE
+        else SOURCE_STATUS_ACTIVE
+    )
+    source.updated_at = datetime.now(UTC)
+    session.commit()
+    return _sources_response(
+        request=request,
+        session=session,
+        success_message=f"source {source.id} updated",
     )
 
 
@@ -243,6 +320,49 @@ def _count_jobs_by_status(session: Session, status: str) -> int:
         )
         or 0
     )
+
+
+def _sources_response(
+    *,
+    request: Request,
+    session: Session,
+    error_message: str | None = None,
+    success_message: str | None = None,
+    created_api_key: str | None = None,
+    status_code: int = 200,
+    form_values: dict | None = None,
+) -> HTMLResponse:
+    source_rows = session.scalars(
+        select(SourceModel).order_by(SourceModel.created_at.desc()).limit(100)
+    ).all()
+    return templates.TemplateResponse(
+        request,
+        "sources.html",
+        {
+            "request": request,
+            "page_title": "Sources",
+            "sources": source_rows,
+            "status_options": SOURCE_STATUS_OPTIONS,
+            "error_message": error_message,
+            "success_message": success_message,
+            "created_api_key": created_api_key,
+            "form_values": form_values or {
+                "name": "",
+                "type": "api",
+                "status": SOURCE_STATUS_ACTIVE,
+            },
+        },
+        status_code=status_code,
+    )
+
+
+def _hash_api_key(api_key: str) -> str:
+    return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+
+
+def _next_source_id() -> int:
+    settings = get_settings()
+    return SnowflakeGenerator(app_id=settings.app_id, node_id=settings.node_id).next_id()
 
 
 def _job_error_summary(session: Session, job_id: int):
