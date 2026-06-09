@@ -265,13 +265,15 @@ def test_web_pages_render_basic_layout(
     assert "/sources" in response.text
 
 
-def test_login_page_renders_form(unauthenticated_client: TestClient) -> None:
+def test_login_page_renders_real_form(unauthenticated_client: TestClient) -> None:
     response = unauthenticated_client.get("/login")
 
     assert response.status_code == 200
     assert 'action="/login"' in response.text
+    assert 'method="post"' in response.text
     assert 'name="email"' in response.text
     assert 'name="password"' in response.text
+    assert 'action="/dashboard"' not in response.text
 
 
 def test_protected_web_pages_redirect_to_login(
@@ -295,7 +297,7 @@ def test_login_rejects_invalid_credentials(
     assert "invalid email or password" in response.text
 
 
-def test_login_sets_session_cookie_and_logout_clears_it(
+def test_login_sets_jwt_cookie_and_logout_clears_it(
     unauthenticated_client: TestClient,
     session: Session,
 ) -> None:
@@ -317,6 +319,7 @@ def test_login_sets_session_cookie_and_logout_clears_it(
     sources = unauthenticated_client.get("/sources")
     assert sources.status_code == 200
     assert "Partner feed" in sources.text
+    assert "Logout" in sources.text
 
     logout = unauthenticated_client.post("/logout", follow_redirects=False)
     assert logout.status_code == 303
@@ -361,7 +364,7 @@ def test_sources_screen_lists_sources_without_api_key_hash(
     assert "sensitive-api-key-hash" not in response.text
 
 
-def test_sources_screen_creates_source_and_shows_api_key_once(
+def test_sources_screen_creates_source_without_showing_api_key(
     client: TestClient,
     session: Session,
     monkeypatch: pytest.MonkeyPatch,
@@ -379,7 +382,6 @@ def test_sources_screen_creates_source_and_shows_api_key_once(
     source = session.scalar(select(SourceModel).where(SourceModel.name == "New feed"))
     assert response.status_code == 200
     assert "source created" in response.text
-    assert "plain-api-key" in response.text
     assert source is not None
     assert source.api_key_hash == hashlib.sha256(b"plain-api-key").hexdigest()
     assert source.api_key_hash != "plain-api-key"

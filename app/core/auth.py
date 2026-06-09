@@ -21,14 +21,12 @@ def authenticate_credentials(email: str, password: str) -> bool:
 
 def create_access_token(email: str) -> str:
     settings = get_settings()
-    expires_at = datetime.now(UTC) + timedelta(
-        seconds=settings.session_max_age_seconds
-    )
+    now = datetime.now(UTC)
     payload = {
         "sub": email,
-        "exp": expires_at,
-        "iat": datetime.now(UTC),
         "typ": "access",
+        "iat": now,
+        "exp": now + timedelta(seconds=settings.session_max_age_seconds),
     }
     return jwt.encode(payload, settings.session_secret, algorithm=JWT_ALGORITHM)
 

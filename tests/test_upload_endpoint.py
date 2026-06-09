@@ -85,10 +85,12 @@ def test_upload_endpoint_accepts_web_login_cookie() -> None:
     fake_service = FakeUploadService()
     app.dependency_overrides[get_upload_service] = lambda: fake_service
     client = TestClient(app)
-    client.post(
+    login = client.post(
         "/login",
         data={"email": "admin@xbreach.local", "password": "xbreach"},
+        follow_redirects=False,
     )
+    assert login.status_code == 303
 
     response = client.post(
         "/api/v1/ingest/upload",
@@ -106,10 +108,12 @@ def test_upload_endpoint_maps_invalid_extension_to_400() -> None:
         error=InvalidUploadExtensionError()
     )
     client = TestClient(app)
-    client.post(
+    login = client.post(
         "/login",
         data={"email": "admin@xbreach.local", "password": "xbreach"},
+        follow_redirects=False,
     )
+    assert login.status_code == 303
 
     response = client.post(
         "/api/v1/ingest/upload",

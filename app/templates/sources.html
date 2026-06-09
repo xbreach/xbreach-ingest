@@ -8,12 +8,6 @@
   {% if success_message %}
   <div class="notice success" role="status">
     {{ success_message }}
-    {% if created_api_key %}
-    <div class="secret-once">
-      <span>API key</span>
-      <code>{{ created_api_key }}</code>
-    </div>
-    {% endif %}
   </div>
   {% endif %}
   <form class="form" action="/sources" method="post">

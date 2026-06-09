@@ -3,21 +3,20 @@ import secrets
 from datetime import UTC, date, datetime, time
 from pathlib import Path
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    File,
-    Form,
-    Query,
-    Request,
-    UploadFile,
-)
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.auth import (
+    AUTH_COOKIE_NAME,
+    authenticate_credentials,
+    authenticated_email_from_request,
+    create_access_token,
+    require_web_user,
+)
 from app.core.config import get_settings
 from app.domain.snowflake import SnowflakeGenerator
 from app.domain.source import SOURCE_STATUS_ACTIVE, SOURCE_STATUS_INACTIVE
@@ -48,10 +47,7 @@ def root() -> RedirectResponse:
 
 
 @router.get("/login", response_class=HTMLResponse)
-def login(
-    request: Request,
-    next: str = "/dashboard",
-) -> Response:
+def login(request: Request, next: str = "/dashboard") -> Response:
     if authenticated_email_from_request(request):
         return RedirectResponse(url=_safe_next_url(next), status_code=303)
     return templates.TemplateResponse(
@@ -309,7 +305,11 @@ def sources(
     authenticated_email: str = Depends(require_web_user),
     session: Session = Depends(get_session_dependency),
 ) -> HTMLResponse:
-    return _sources_response(request=request, session=session)
+    return _sources_response(
+        request=request,
+        session=session,
+        authenticated_email=authenticated_email,
+    )
 
 
 @router.post("/sources", response_class=HTMLResponse)
@@ -318,6 +318,7 @@ def create_source(
     name: str = Form(...),
     type: str = Form(...),
     status: str = Form(SOURCE_STATUS_ACTIVE),
+    authenticated_email: str = Depends(require_web_user),
     session: Session = Depends(get_session_dependency),
 ) -> HTMLResponse:
     name = name.strip()
@@ -326,18 +327,18 @@ def create_source(
         return _sources_response(
             request=request,
             session=session,
+            authenticated_email=authenticated_email,
             error_message="source name, type and status are required",
             status_code=400,
             form_values={"name": name, "type": source_type, "status": status},
         )
 
-    api_key = secrets.token_urlsafe(32)
     source = SourceModel(
         id=_next_source_id(),
         name=name,
         type=source_type,
         status=status,
-        api_key_hash=_hash_api_key(api_key),
+        api_key_hash=_hash_api_key(secrets.token_urlsafe(32)),
     )
     session.add(source)
     try:
@@ -347,6 +348,7 @@ def create_source(
         return _sources_response(
             request=request,
             session=session,
+            authenticated_email=authenticated_email,
             error_message="failed to create source",
             status_code=409,
             form_values={"name": name, "type": source_type, "status": status},
@@ -355,8 +357,8 @@ def create_source(
     return _sources_response(
         request=request,
         session=session,
+        authenticated_email=authenticated_email,
         success_message="source created",
-        created_api_key=api_key,
     )
 
 
@@ -364,6 +366,7 @@ def create_source(
 def toggle_source_status(
     source_id: int,
     request: Request,
+    authenticated_email: str = Depends(require_web_user),
     session: Session = Depends(get_session_dependency),
 ) -> HTMLResponse:
     source = session.get(SourceModel, source_id)
@@ -371,6 +374,7 @@ def toggle_source_status(
         return _sources_response(
             request=request,
             session=session,
+            authenticated_email=authenticated_email,
             error_message="source not found",
             status_code=404,
         )
@@ -385,6 +389,7 @@ def toggle_source_status(
     return _sources_response(
         request=request,
         session=session,
+        authenticated_email=authenticated_email,
         success_message=f"source {source.id} updated",
     )
 
@@ -404,9 +409,9 @@ def _sources_response(
     *,
     request: Request,
     session: Session,
+    authenticated_email: str,
     error_message: str | None = None,
     success_message: str | None = None,
-    created_api_key: str | None = None,
     status_code: int = 200,
     form_values: dict | None = None,
 ) -> HTMLResponse:
@@ -419,11 +424,12 @@ def _sources_response(
         {
             "request": request,
             "page_title": "Sources",
+            "is_authenticated": True,
+            "authenticated_email": authenticated_email,
             "sources": source_rows,
             "status_options": SOURCE_STATUS_OPTIONS,
             "error_message": error_message,
             "success_message": success_message,
-            "created_api_key": created_api_key,
             "form_values": form_values or {
                 "name": "",
                 "type": "api",
