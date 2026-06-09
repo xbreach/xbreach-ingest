@@ -12,7 +12,6 @@ from app.infrastructure.database import Base, SourceModel
 from app.repositories.sources import SourceRepository
 from app.services.sources import (
     InactiveSourceError,
-    InvalidApiKeyError,
     SourceNotFoundError,
     SourceService,
 )
@@ -58,16 +57,6 @@ def test_find_by_id_returns_source(session: Session) -> None:
     assert source.is_active
 
 
-def test_find_by_api_key_hash_returns_source(session: Session) -> None:
-    add_source(session, api_key_hash="abc123")
-    repository = SourceRepository(session)
-
-    source = repository.find_by_api_key_hash("abc123")
-
-    assert source is not None
-    assert source.api_key_hash == "abc123"
-
-
 def test_is_active_returns_false_for_inactive_or_missing_source(
     session: Session,
 ) -> None:
@@ -78,27 +67,6 @@ def test_is_active_returns_false_for_inactive_or_missing_source(
     assert repository.is_active(9999) is False
 
 
-def test_authenticate_by_api_key_hash_rejects_invalid_key(session: Session) -> None:
-    service = SourceService(SourceRepository(session))
-
-    with pytest.raises(InvalidApiKeyError) as exc_info:
-        service.authenticate_by_api_key_hash("missing")
-
-    assert exc_info.value.status_code == 401
-
-
-def test_authenticate_by_api_key_hash_rejects_inactive_source(
-    session: Session,
-) -> None:
-    add_source(session, status=SOURCE_STATUS_INACTIVE, api_key_hash="abc123")
-    service = SourceService(SourceRepository(session))
-
-    with pytest.raises(InactiveSourceError) as exc_info:
-        service.authenticate_by_api_key_hash("abc123")
-
-    assert exc_info.value.status_code == 403
-
-
 def test_require_active_source_rejects_missing_source(session: Session) -> None:
     service = SourceService(SourceRepository(session))
 
@@ -106,6 +74,16 @@ def test_require_active_source_rejects_missing_source(session: Session) -> None:
         service.require_active_source(9999)
 
     assert exc_info.value.status_code == 404
+
+
+def test_require_active_source_rejects_inactive_source(session: Session) -> None:
+    add_source(session, status=SOURCE_STATUS_INACTIVE)
+    service = SourceService(SourceRepository(session))
+
+    with pytest.raises(InactiveSourceError) as exc_info:
+        service.require_active_source(1001)
+
+    assert exc_info.value.status_code == 403
 
 
 def test_require_active_source_allows_active_source(session: Session) -> None:

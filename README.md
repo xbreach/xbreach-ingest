@@ -44,6 +44,10 @@ XBREACH_DATA_PATH=/data/xbreach
 XBREACH_APP_ID=1
 XBREACH_NODE_ID=1
 XBREACH_UPLOAD_MAX_FILE_SIZE_BYTES=104857600
+XBREACH_LOGIN_EMAIL=admin@xbreach.local
+XBREACH_LOGIN_PASSWORD=xbreach
+XBREACH_SESSION_SECRET=change-me-in-production
+XBREACH_SESSION_MAX_AGE_SECONDS=28800
 XBREACH_POSTGRES_HOST=postgres
 XBREACH_POSTGRES_PORT=5432
 XBREACH_POSTGRES_DB=xbreach
@@ -52,6 +56,30 @@ XBREACH_POSTGRES_PASSWORD=xbreach
 XBREACH_REDIS_HOST=redis
 XBREACH_REDIS_PORT=6379
 XBREACH_REDIS_DB=0
+```
+
+`XBREACH_LOGIN_EMAIL` e `XBREACH_LOGIN_PASSWORD` definem o usuario unico de
+acesso para a interface web e para a API. Troque `XBREACH_SESSION_SECRET` em
+ambientes compartilhados ou de producao, pois ela assina os tokens JWT.
+
+## Autenticacao
+
+O login web em `/login` grava um cookie `HttpOnly` com JWT. Esse mesmo cookie
+autoriza chamadas para a API feitas pelo navegador.
+
+Clientes externos podem obter um token com:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@xbreach.local","password":"xbreach"}'
+```
+
+Use o `access_token` retornado nas chamadas API:
+
+```bash
+curl http://localhost:8000/api/v1/ingest/upload \
+  -H "Authorization: Bearer <access_token>"
 ```
 
 ## Executar localmente

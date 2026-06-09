@@ -20,12 +20,11 @@ from app.infrastructure.database import (
 from app.repositories.breaches import BreachRepository
 from app.repositories.ingestion_jobs import IngestionJobRepository
 from app.repositories.sources import SourceRepository
-from app.services.sources import InactiveSourceError, InvalidApiKeyError
+from app.services.sources import InactiveSourceError, SourceNotFoundError
 from app.services.upload import (
     EmptyUploadFileError,
     InvalidUploadContentTypeError,
     InvalidUploadExtensionError,
-    SourceMismatchError,
     UnsafeUploadFilenameError,
     UploadFileTooLargeError,
     UploadIngestResult,
@@ -102,7 +101,6 @@ def test_upload_creates_breach_job_and_saves_file(
         source_id=2001,
         breach_name="sample breach",
         collected_at=COLLECTED_AT,
-        api_key="secret",
     )
 
     breach = session.get(BreachModel, 3001)
@@ -151,7 +149,6 @@ def test_upload_sanitizes_malicious_but_local_filename(
         source_id=2001,
         breach_name="sample breach",
         collected_at=COLLECTED_AT,
-        api_key="secret",
     )
 
     job = session.get(IngestionJobModel, result.job_id)
@@ -169,7 +166,6 @@ def test_upload_rejects_invalid_extension(session: Session, tmp_path: Path) -> N
             source_id=2001,
             breach_name="sample breach",
             collected_at=None,
-            api_key="secret",
         )
 
 
@@ -182,7 +178,6 @@ def test_upload_rejects_invalid_content_type(session: Session, tmp_path: Path) -
             source_id=2001,
             breach_name="sample breach",
             collected_at=None,
-            api_key="secret",
         )
 
 
@@ -198,7 +193,6 @@ def test_upload_rejects_path_traversal_filename(
             source_id=2001,
             breach_name="sample breach",
             collected_at=None,
-            api_key="secret",
         )
 
 
@@ -211,7 +205,6 @@ def test_upload_rejects_empty_file(session: Session, tmp_path: Path) -> None:
             source_id=2001,
             breach_name="sample breach",
             collected_at=None,
-            api_key="secret",
         )
 
     assert list(tmp_path.iterdir()) == []
@@ -238,38 +231,23 @@ def test_upload_rejects_file_larger_than_configured_limit(
             source_id=2001,
             breach_name="sample breach",
             collected_at=None,
-            api_key="secret",
         )
 
     assert list(tmp_path.iterdir()) == []
 
 
-def test_upload_rejects_invalid_api_key(session: Session, tmp_path: Path) -> None:
-    add_source(session)
-
-    with pytest.raises(InvalidApiKeyError):
-        service(session, tmp_path).upload(
-            file=upload_file("input.txt", b"content"),
-            source_id=2001,
-            breach_name="sample breach",
-            collected_at=None,
-            api_key="wrong",
-        )
-
-
-def test_upload_rejects_source_id_mismatch(session: Session, tmp_path: Path) -> None:
+def test_upload_rejects_unknown_source(session: Session, tmp_path: Path) -> None:
     add_source(session, source_id=2001)
 
-    with pytest.raises(SourceMismatchError) as exc_info:
+    with pytest.raises(SourceNotFoundError) as exc_info:
         service(session, tmp_path).upload(
             file=upload_file("input.txt", b"content"),
             source_id=9999,
             breach_name="sample breach",
             collected_at=None,
-            api_key="secret",
         )
 
-    assert exc_info.value.status_code == 401
+    assert exc_info.value.status_code == 404
 
 
 def test_upload_rejects_inactive_source(session: Session, tmp_path: Path) -> None:
@@ -281,7 +259,6 @@ def test_upload_rejects_inactive_source(session: Session, tmp_path: Path) -> Non
             source_id=2001,
             breach_name="sample breach",
             collected_at=None,
-            api_key="secret",
         )
 
     assert session.query(IngestionJobModel).count() == 0
@@ -297,7 +274,6 @@ def test_upload_duplicate_checksum_returns_existing_job_without_creating_new_job
         source_id=2001,
         breach_name="first breach",
         collected_at=COLLECTED_AT,
-        api_key="secret",
     )
 
     second_result = service(session, tmp_path).upload(
@@ -305,7 +281,6 @@ def test_upload_duplicate_checksum_returns_existing_job_without_creating_new_job
         source_id=2001,
         breach_name="second breach",
         collected_at=COLLECTED_AT,
-        api_key="secret",
     )
 
     assert second_result == first_result

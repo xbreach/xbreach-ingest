@@ -16,7 +16,7 @@ from app.repositories.ingestion_jobs import IngestionJobRepository
 from app.repositories.sources import SourceRepository
 from app.schemas.breach import CreateBreach
 from app.schemas.ingestion_job import CreateIngestionJob
-from app.services.sources import InvalidApiKeyError, SourceService
+from app.services.sources import SourceService
 
 ALLOWED_UPLOAD_SUFFIXES = {".txt", ".csv", ".gz", ".zst"}
 ALLOWED_CONTENT_TYPES_BY_SUFFIX = {
@@ -64,11 +64,6 @@ class UnsafeUploadFilenameError(UploadValidationError):
         super().__init__("uploaded filename is not safe", 400)
 
 
-class SourceMismatchError(UploadValidationError):
-    def __init__(self) -> None:
-        super().__init__("invalid API key", 401)
-
-
 class UploadStorageError(UploadValidationError):
     def __init__(self) -> None:
         super().__init__("failed to write file to local storage", 500)
@@ -112,15 +107,10 @@ class UploadIngestService:
         source_id: int,
         breach_name: str,
         collected_at: datetime | None,
-        api_key: str,
     ) -> UploadIngestResult:
         self._validate_extension(file.filename)
         self._validate_content_type(file.filename, file.content_type)
-
-        api_key_hash = self._hash_api_key(api_key)
-        source = self._source_service.authenticate_by_api_key_hash(api_key_hash)
-        if source.id != source_id:
-            raise SourceMismatchError()
+        self._source_service.require_active_source(source_id)
 
         staged_file = self._stage_file(file)
         existing_job = self._job_repository.find_by_checksum_sha256(
@@ -233,12 +223,6 @@ class UploadIngestService:
         if not sanitized or Path(sanitized).suffix.lower() not in ALLOWED_UPLOAD_SUFFIXES:
             raise UnsafeUploadFilenameError()
         return sanitized
-
-    @staticmethod
-    def _hash_api_key(api_key: str) -> str:
-        if not api_key:
-            raise InvalidApiKeyError()
-        return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
 
     @staticmethod
     def _storage_date(collected_at: datetime | None):

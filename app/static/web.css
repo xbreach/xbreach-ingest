@@ -115,11 +115,25 @@ button {
   font-weight: 700;
 }
 
+.secondary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  color: var(--text);
+}
+
 button {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
   cursor: pointer;
+}
+
+button.secondary-action {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
 }
 
 .summary-grid {
