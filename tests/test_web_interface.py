@@ -35,11 +35,21 @@ def session() -> Iterator[Session]:
 
 
 @pytest.fixture()
-def client(session: Session) -> Iterator[TestClient]:
+def unauthenticated_client(session: Session) -> Iterator[TestClient]:
     app.dependency_overrides[get_session_dependency] = lambda: session
     with TestClient(app) as client:
         yield client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def client(unauthenticated_client: TestClient) -> TestClient:
+    response = unauthenticated_client.post(
+        "/login",
+        data={"email": "admin@xbreach.local", "password": "xbreach"},
+    )
+    assert response.status_code == 200
+    return unauthenticated_client
 
 
 def seed_operational_data(session: Session) -> None:
@@ -230,7 +240,6 @@ def seed_job_detail_data(session: Session) -> None:
 @pytest.mark.parametrize(
     "path, expected_text",
     [
-        ("/login", "Login"),
         ("/dashboard", "Total jobs"),
         ("/jobs", "original.txt"),
         ("/jobs/4001", "Job details"),
@@ -254,6 +263,68 @@ def test_web_pages_render_basic_layout(
     assert "/jobs" in response.text
     assert "/upload" in response.text
     assert "/sources" in response.text
+
+
+def test_login_page_renders_form(unauthenticated_client: TestClient) -> None:
+    response = unauthenticated_client.get("/login")
+
+    assert response.status_code == 200
+    assert 'action="/login"' in response.text
+    assert 'name="email"' in response.text
+    assert 'name="password"' in response.text
+
+
+def test_protected_web_pages_redirect_to_login(
+    unauthenticated_client: TestClient,
+) -> None:
+    response = unauthenticated_client.get("/dashboard", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?next=%2Fdashboard"
+
+
+def test_login_rejects_invalid_credentials(
+    unauthenticated_client: TestClient,
+) -> None:
+    response = unauthenticated_client.post(
+        "/login",
+        data={"email": "admin@xbreach.local", "password": "wrong"},
+    )
+
+    assert response.status_code == 401
+    assert "invalid email or password" in response.text
+
+
+def test_login_sets_session_cookie_and_logout_clears_it(
+    unauthenticated_client: TestClient,
+    session: Session,
+) -> None:
+    seed_operational_data(session)
+
+    login = unauthenticated_client.post(
+        "/login",
+        data={
+            "email": "admin@xbreach.local",
+            "password": "xbreach",
+            "next": "/sources",
+        },
+        follow_redirects=False,
+    )
+    assert login.status_code == 303
+    assert login.headers["location"] == "/sources"
+    assert "xbreach_ingest_token=" in login.headers["set-cookie"]
+
+    sources = unauthenticated_client.get("/sources")
+    assert sources.status_code == 200
+    assert "Partner feed" in sources.text
+
+    logout = unauthenticated_client.post("/logout", follow_redirects=False)
+    assert logout.status_code == 303
+    assert logout.headers["location"] == "/login"
+
+    protected = unauthenticated_client.get("/sources", follow_redirects=False)
+    assert protected.status_code == 303
+    assert protected.headers["location"] == "/login?next=%2Fsources"
 
 
 def test_root_redirects_to_dashboard(client: TestClient) -> None:
@@ -315,7 +386,6 @@ def test_upload_screen_submits_multipart_and_shows_job_id(
             "source_id": "2001",
             "breach_name": "sample breach",
             "collected_at": "2026-06-07T12:30",
-            "api_key": "secret",
         },
         files={"file": ("input.txt", b"content", "text/plain")},
     )
@@ -324,7 +394,6 @@ def test_upload_screen_submits_multipart_and_shows_job_id(
     assert "Upload created job 9001." in response.text
     assert calls[0]["source_id"] == 2001
     assert calls[0]["breach_name"] == "sample breach"
-    assert calls[0]["api_key"] == "secret"
     assert calls[0]["file"].filename == "input.txt"
 
 
@@ -345,7 +414,6 @@ def test_upload_screen_shows_validation_error(
         data={
             "source_id": "2001",
             "breach_name": "sample breach",
-            "api_key": "secret",
         },
         files={"file": ("input.exe", b"content", "application/octet-stream")},
     )

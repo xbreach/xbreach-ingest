@@ -1,12 +1,28 @@
 from datetime import UTC, date, datetime, time
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Query,
+    Request,
+    UploadFile,
+)
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.auth import (
+    AUTH_COOKIE_NAME,
+    authenticate_credentials,
+    authenticated_email_from_request,
+    create_access_token,
+    require_web_user,
+)
+from app.core.config import get_settings
 from app.infrastructure.database import (
     BreachModel,
     IngestionJobErrorModel,
@@ -33,17 +49,74 @@ def root() -> RedirectResponse:
 
 
 @router.get("/login", response_class=HTMLResponse)
-def login(request: Request) -> HTMLResponse:
+def login(
+    request: Request,
+    next: str = "/dashboard",
+) -> Response:
+    if authenticated_email_from_request(request):
+        return RedirectResponse(url=_safe_next_url(next), status_code=303)
     return templates.TemplateResponse(
         request,
         "login.html",
-        {"request": request, "page_title": "Login"},
+        {
+            "request": request,
+            "page_title": "Login",
+            "next": _safe_next_url(next),
+            "is_authenticated": False,
+        },
     )
+
+
+@router.post("/login", response_class=HTMLResponse)
+def submit_login(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    next: str = Form("/dashboard"),
+) -> Response:
+    settings = get_settings()
+    if not authenticate_credentials(email, password):
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {
+                "request": request,
+                "page_title": "Login",
+                "next": _safe_next_url(next),
+                "error_message": "invalid email or password",
+                "is_authenticated": False,
+            },
+            status_code=401,
+        )
+
+    response = RedirectResponse(url=_safe_next_url(next), status_code=303)
+    response.set_cookie(
+        AUTH_COOKIE_NAME,
+        create_access_token(email),
+        httponly=True,
+        max_age=settings.session_max_age_seconds,
+        samesite="lax",
+    )
+    return response
+
+
+@router.post("/logout", include_in_schema=False)
+def logout() -> RedirectResponse:
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie(AUTH_COOKIE_NAME)
+    return response
+
+
+def _safe_next_url(next_url: str) -> str:
+    if not next_url.startswith("/") or next_url.startswith("//"):
+        return "/dashboard"
+    return next_url
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
 def dashboard(
     request: Request,
+    authenticated_email: str = Depends(require_web_user),
     session: Session = Depends(get_session_dependency),
 ) -> HTMLResponse:
     summary = {
@@ -61,6 +134,8 @@ def dashboard(
         {
             "request": request,
             "page_title": "Dashboard",
+            "is_authenticated": True,
+            "authenticated_email": authenticated_email,
             "summary": summary,
             "recent_jobs": recent_jobs,
         },
@@ -76,6 +151,7 @@ def jobs(
     date_to: date | None = None,
     filename: str | None = None,
     page: int = Query(1, ge=1),
+    authenticated_email: str = Depends(require_web_user),
     session: Session = Depends(get_session_dependency),
 ) -> HTMLResponse:
     filters = JobListingFilters(
@@ -104,6 +180,8 @@ def jobs(
         {
             "request": request,
             "page_title": "Jobs",
+            "is_authenticated": True,
+            "authenticated_email": authenticated_email,
             "jobs": job_rows,
             "sources": sources,
             "source_names": source_names,
@@ -127,6 +205,7 @@ def jobs(
 def job_detail(
     job_id: int,
     request: Request,
+    authenticated_email: str = Depends(require_web_user),
     session: Session = Depends(get_session_dependency),
 ) -> HTMLResponse:
     job = session.get(IngestionJobModel, job_id)
@@ -140,6 +219,8 @@ def job_detail(
         {
             "request": request,
             "page_title": f"Job {job_id}",
+            "is_authenticated": True,
+            "authenticated_email": authenticated_email,
             "job": job,
             "source": source,
             "breach": breach,
@@ -154,6 +235,7 @@ def job_detail(
 @router.get("/upload", response_class=HTMLResponse)
 def upload(
     request: Request,
+    authenticated_email: str = Depends(require_web_user),
     session: Session = Depends(get_session_dependency),
 ) -> HTMLResponse:
     return templates.TemplateResponse(
@@ -161,6 +243,7 @@ def upload(
         "upload.html",
         _upload_context(
             request=request,
+            authenticated_email=authenticated_email,
             sources=_list_sources(session),
         ),
     )
@@ -172,8 +255,8 @@ def submit_upload(
     source_id: int = Form(...),
     breach_name: str = Form(...),
     collected_at: str = Form(""),
-    api_key: str = Form(...),
     file: UploadFile = File(...),
+    authenticated_email: str = Depends(require_web_user),
     session: Session = Depends(get_session_dependency),
 ) -> HTMLResponse:
     upload_service = UploadIngestService(
@@ -188,12 +271,12 @@ def submit_upload(
             source_id=source_id,
             breach_name=breach_name,
             collected_at=parsed_collected_at,
-            api_key=api_key,
         )
     except ValueError:
         return _upload_response(
             request=request,
             session=session,
+            authenticated_email=authenticated_email,
             error_message="collected at must be a valid datetime",
             status_code=400,
             selected_source_id=source_id,
@@ -204,6 +287,7 @@ def submit_upload(
         return _upload_response(
             request=request,
             session=session,
+            authenticated_email=authenticated_email,
             error_message=exc.message,
             status_code=exc.status_code,
             selected_source_id=source_id,
@@ -214,6 +298,7 @@ def submit_upload(
     return _upload_response(
         request=request,
         session=session,
+        authenticated_email=authenticated_email,
         job_id=result.job_id,
         selected_source_id=source_id,
     )
@@ -222,6 +307,7 @@ def submit_upload(
 @router.get("/sources", response_class=HTMLResponse)
 def sources(
     request: Request,
+    authenticated_email: str = Depends(require_web_user),
     session: Session = Depends(get_session_dependency),
 ) -> HTMLResponse:
     source_rows = session.scalars(
@@ -230,7 +316,13 @@ def sources(
     return templates.TemplateResponse(
         request,
         "sources.html",
-        {"request": request, "page_title": "Sources", "sources": source_rows},
+        {
+            "request": request,
+            "page_title": "Sources",
+            "is_authenticated": True,
+            "authenticated_email": authenticated_email,
+            "sources": source_rows,
+        },
     )
 
 
@@ -282,6 +374,7 @@ def _list_sources(session: Session) -> list[SourceModel]:
 def _upload_context(
     *,
     request: Request,
+    authenticated_email: str,
     sources: list[SourceModel],
     error_message: str | None = None,
     job_id: int | None = None,
@@ -292,6 +385,8 @@ def _upload_context(
     return {
         "request": request,
         "page_title": "Upload",
+        "is_authenticated": True,
+        "authenticated_email": authenticated_email,
         "sources": sources,
         "error_message": error_message,
         "job_id": job_id,
@@ -305,6 +400,7 @@ def _upload_response(
     *,
     request: Request,
     session: Session,
+    authenticated_email: str,
     error_message: str | None = None,
     job_id: int | None = None,
     status_code: int = 200,
@@ -317,6 +413,7 @@ def _upload_response(
         "upload.html",
         _upload_context(
             request=request,
+            authenticated_email=authenticated_email,
             sources=_list_sources(session),
             error_message=error_message,
             job_id=job_id,

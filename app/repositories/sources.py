@@ -13,11 +13,6 @@ class SourceRepository:
         model = self._session.get(SourceModel, source_id)
         return self._to_entity(model) if model else None
 
-    def find_by_api_key_hash(self, api_key_hash: str) -> Source | None:
-        statement = select(SourceModel).where(SourceModel.api_key_hash == api_key_hash)
-        model = self._session.scalar(statement)
-        return self._to_entity(model) if model else None
-
     def is_active(self, source_id: int) -> bool:
         statement = select(SourceModel.status).where(SourceModel.id == source_id)
         status = self._session.scalar(statement)

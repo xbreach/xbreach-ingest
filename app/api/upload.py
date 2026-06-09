@@ -1,8 +1,9 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from app.core.auth import require_api_user
 from app.infrastructure.database import get_session_dependency
 from app.repositories.breaches import BreachRepository
 from app.repositories.ingestion_jobs import IngestionJobRepository
@@ -30,7 +31,7 @@ def upload_file(
     source_id: int = Form(...),
     breach_name: str = Form(...),
     collected_at: datetime | None = Form(None),
-    x_api_key: str = Header(...),
+    _authenticated_email: str = Depends(require_api_user),
     upload_service: UploadIngestService = Depends(get_upload_service),
 ) -> UploadIngestResponse:
     try:
@@ -39,7 +40,6 @@ def upload_file(
             source_id=source_id,
             breach_name=breach_name,
             collected_at=collected_at,
-            api_key=x_api_key,
         )
     except (SourceAccessError, UploadValidationError) as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc

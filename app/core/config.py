@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     app_id: int = 1
     node_id: int = 1
     upload_max_file_size_bytes: int = 104_857_600
+    login_email: str = "admin@xbreach.local"
+    login_password: str = "xbreach"
+    session_secret: str = "change-me-in-production"
+    session_max_age_seconds: int = 28_800
 
     postgres_host: str = "postgres"
     postgres_port: int = 5432
