@@ -179,6 +179,10 @@ button.secondary-action {
   margin-bottom: 18px;
 }
 
+.sources-create-panel {
+  margin-bottom: 18px;
+}
+
 .filters-form {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -255,6 +259,21 @@ tr:last-child td {
   color: #9f1239;
 }
 
+.status-active {
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.status-inactive {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.status-disabled {
+  background: #fff1f2;
+  color: #9f1239;
+}
+
 .result-count {
   color: var(--muted);
   font-size: 13px;
@@ -300,9 +319,32 @@ tr:last-child td {
   color: #166534;
 }
 
+.secret-once {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.secret-once code {
+  overflow-wrap: anywhere;
+  border-radius: 6px;
+  padding: 8px;
+  background: #ffffff;
+  color: var(--text);
+  font-weight: 700;
+}
+
 .form {
   display: grid;
   gap: 14px;
+}
+
+.inline-form {
+  display: inline;
+}
+
+.inline-form button {
+  padding: 6px 10px;
 }
 
 label {
