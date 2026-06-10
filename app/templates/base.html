@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page_title }} - xbreach ingest</title>
+    <script>
+      (function () {
+        var savedTheme = localStorage.getItem("xbreach-theme");
+        var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.theme = savedTheme || (prefersDark ? "dark" : "light");
+      })();
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', path='/web.css') }}">
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="/dashboard">
+        <span class="brand-mark" aria-hidden="true">xb</span>
+        <span>xbreach ingest</span>
+      </a>
+      {% if is_authenticated %}
+      <nav class="nav" aria-label="Primary">
+        <a href="/dashboard" {% if request.url.path == "/dashboard" %}aria-current="page"{% endif %}>Dashboard</a>
+        <a href="/jobs" {% if request.url.path.startswith("/jobs") %}aria-current="page"{% endif %}>Jobs</a>
+        <a href="/upload" {% if request.url.path == "/upload" %}aria-current="page"{% endif %}>Upload</a>
+        <a href="/sources" {% if request.url.path == "/sources" %}aria-current="page"{% endif %}>Sources</a>
+      </nav>
+      {% endif %}
+    </aside>
+    <main class="page">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Ingestion console</p>
+          <h1>{{ page_title }}</h1>
+        </div>
+        <div class="page-actions">
+          <button class="secondary-action theme-toggle" type="button" data-theme-toggle aria-label="Toggle color theme">
+            <span data-theme-label>Theme</span>
+          </button>
+          {% if is_authenticated %}
+          <form class="inline-form" action="/logout" method="post">
+            <button class="secondary-action" type="submit">Logout</button>
+          </form>
+          {% elif request.url.path != "/login" %}
+          <a class="secondary-action" href="/login">Login</a>
+          {% endif %}
+        </div>
+      </header>
+      {% block content %}{% endblock %}
+    </main>
+    <script>
+      (function () {
+        var button = document.querySelector("[data-theme-toggle]");
+        var label = document.querySelector("[data-theme-label]");
+        function syncLabel() {
+          var theme = document.documentElement.dataset.theme || "light";
+          label.textContent = theme === "dark" ? "Light mode" : "Dark mode";
+        }
+        button.addEventListener("click", function () {
+          var nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+          document.documentElement.dataset.theme = nextTheme;
+          localStorage.setItem("xbreach-theme", nextTheme);
+          syncLabel();
+        });
+        syncLabel();
+      })();
+    </script>
+  </body>
+</html>

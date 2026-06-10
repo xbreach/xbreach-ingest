@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel compact-panel sources-create-panel">
+  {% if error_message %}
+  <div class="notice error" role="alert">{{ error_message }}</div>
+  {% endif %}
+  {% if success_message %}
+  <div class="notice success" role="status">
+    {{ success_message }}
+  </div>
+  {% endif %}
+  <form class="form" action="/sources" method="post">
+    <label>
+      Name
+      <input type="text" name="name" value="{{ form_values.name }}" required>
+    </label>
+    <label>
+      Type
+      <input type="text" name="type" value="{{ form_values.type }}" required>
+    </label>
+    <label>
+      Status
+      <select name="status" required>
+        {% for option in status_options %}
+        <option value="{{ option }}" {% if form_values.status == option %}selected{% endif %}>
+          {{ option }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Create source</button>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="section-header">
+    <h2>Sources</h2>
+    <span class="result-count">{{ sources | length }} sources</span>
+  </div>
+  {% if sources %}
+  <table>
+    <thead>
+      <tr>
+        <th>Source</th>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Created at</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for source in sources %}
+      <tr>
+        <td>{{ source.id }}</td>
+        <td>{{ source.name }}</td>
+        <td>{{ source.type }}</td>
+        <td><span class="status status-{{ source.status }}">{{ source.status }}</span></td>
+        <td>{{ source.created_at }}</td>
+        <td>
+          <form class="inline-form" action="/sources/{{ source.id }}/toggle" method="post">
+            <button type="submit">
+              {% if source.status == "active" %}Deactivate{% else %}Activate{% endif %}
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No sources configured.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="summary-grid" aria-label="Dashboard summary">
+  <article class="metric">
+    <span>Sources</span>
+    <strong>{{ summary.sources }}</strong>
+  </article>
+  <article class="metric">
+    <span>Total jobs</span>
+    <strong>{{ summary.jobs }}</strong>
+  </article>
+  <article class="metric">
+    <span>Pending</span>
+    <strong>{{ summary.pending_jobs }}</strong>
+  </article>
+  <article class="metric">
+    <span>Failed</span>
+    <strong>{{ summary.failed_jobs }}</strong>
+  </article>
+</section>
+
+<section class="panel">
+  <div class="section-header">
+    <h2>Recent jobs</h2>
+    <a href="/jobs">View all</a>
+  </div>
+  {% if recent_jobs %}
+  <table>
+    <thead>
+      <tr>
+        <th>Job</th>
+        <th>Filename</th>
+        <th>Status</th>
+        <th>Size</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for job in recent_jobs %}
+      <tr>
+        <td><a href="/jobs/{{ job.id }}">{{ job.id }}</a></td>
+        <td>{{ job.original_filename }}</td>
+        <td><span class="status">{{ job.status }}</span></td>
+        <td>{{ job.file_size_bytes }} bytes</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No ingestion jobs yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

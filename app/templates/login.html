@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel compact-panel">
+  {% if error_message %}
+  <div class="notice error" role="alert">{{ error_message }}</div>
+  {% endif %}
+  <form class="form" action="/login" method="post">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>
+      Email
+      <input type="email" name="email" autocomplete="email" required autofocus>
+    </label>
+    <label>
+      Password
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button type="submit">Continue</button>
+  </form>
+</section>
+{% endblock %}

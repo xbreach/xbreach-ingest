@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - development
+      - main
+  push:
+    branches:
+      - development
+      - main
+
+jobs:
+  test:
+    name: Test and healthcheck
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: xbreach
+          POSTGRES_USER: xbreach
+          POSTGRES_PASSWORD: xbreach
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U xbreach -d xbreach"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest
+
+      - name: Run migrations
+        env:
+          XBREACH_POSTGRES_HOST: 127.0.0.1
+          XBREACH_POSTGRES_PORT: 5432
+          XBREACH_POSTGRES_DB: xbreach
+          XBREACH_POSTGRES_USER: xbreach
+          XBREACH_POSTGRES_PASSWORD: xbreach
+        run: python -m app.infrastructure.migrations
+
+      - name: Start API
+        env:
+          XBREACH_POSTGRES_HOST: 127.0.0.1
+          XBREACH_POSTGRES_PORT: 5432
+          XBREACH_POSTGRES_DB: xbreach
+          XBREACH_POSTGRES_USER: xbreach
+          XBREACH_POSTGRES_PASSWORD: xbreach
+          XBREACH_REDIS_HOST: 127.0.0.1
+          XBREACH_REDIS_PORT: 6379
+          XBREACH_REDIS_DB: 0
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
+          echo $! > uvicorn.pid
+
+      - name: Check health endpoint
+        run: |
+          for attempt in {1..10}; do
+            if curl --fail --silent http://127.0.0.1:8000/health | grep '"status":"ok"'; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat uvicorn.log
+          exit 1
+
+      - name: Stop API
+        if: always()
+        run: |
+          if [ -f uvicorn.pid ]; then
+            kill "$(cat uvicorn.pid)" || true
+          fi

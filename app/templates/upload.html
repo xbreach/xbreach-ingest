@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel compact-panel">
+  {% if error_message %}
+  <div class="notice error" role="alert">{{ error_message }}</div>
+  {% endif %}
+  {% if job_id %}
+  <div class="notice success" role="status">Upload created job {{ job_id }}.</div>
+  {% endif %}
+  <form class="form" action="/upload" method="post" enctype="multipart/form-data">
+    <label>
+      Source
+      <select name="source_id" required>
+        <option value="">Select source</option>
+        {% for source in sources %}
+        <option value="{{ source.id }}" {% if selected_source_id == source.id %}selected{% endif %}>
+          {{ source.name }} ({{ source.status }})
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Breach name
+      <input type="text" name="breach_name" value="{{ breach_name }}" required>
+    </label>
+    <label>
+      Collected at
+      <input type="datetime-local" name="collected_at" value="{{ collected_at }}">
+    </label>
+    <label>
+      File
+      <input type="file" name="file" accept=".txt,.csv,.gz,.zst" required>
+    </label>
+    <button type="submit">Upload</button>
+  </form>
+</section>
+{% endblock %}
