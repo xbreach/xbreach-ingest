@@ -1,76 +1,90 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="panel compact-panel sources-create-panel">
-  {% if error_message %}
-  <div class="notice error" role="alert">{{ error_message }}</div>
-  {% endif %}
-  {% if success_message %}
-  <div class="notice success" role="status">
-    {{ success_message }}
-  </div>
-  {% endif %}
-  <form class="form" action="/sources" method="post">
-    <label>
-      Name
-      <input type="text" name="name" value="{{ form_values.name }}" required>
-    </label>
-    <label>
-      Type
-      <input type="text" name="type" value="{{ form_values.type }}" required>
-    </label>
-    <label>
-      Status
-      <select name="status" required>
-        {% for option in status_options %}
-        <option value="{{ option }}" {% if form_values.status == option %}selected{% endif %}>
-          {{ option }}
-        </option>
-        {% endfor %}
-      </select>
-    </label>
-    <button type="submit">Create source</button>
-  </form>
-</section>
+<section class="grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+  <section class="border border-zinc-800 bg-zinc-950 p-5">
+    <div class="mb-5">
+      <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Source control</p>
+      <h2 class="mt-1 text-xl font-semibold tracking-tight text-zinc-50">Create source</h2>
+    </div>
+    {% if error_message %}
+    <div class="mb-4 border border-red-800 bg-red-950/60 px-3 py-2 text-sm font-medium text-red-200" role="alert">{{ error_message }}</div>
+    {% endif %}
+    {% if success_message %}
+    <div class="mb-4 border border-emerald-800 bg-emerald-950/60 px-3 py-2 text-sm font-medium text-emerald-200" role="status">
+      {{ success_message }}
+    </div>
+    {% endif %}
+    <form class="grid gap-4" action="/sources" method="post">
+      <label class="grid gap-2 text-sm font-medium text-zinc-300">
+        Name
+        <input class="h-11 border border-zinc-700 bg-zinc-950 px-3 text-zinc-50 outline-none transition focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" type="text" name="name" value="{{ form_values.name }}" required>
+      </label>
+      <label class="grid gap-2 text-sm font-medium text-zinc-300">
+        Type
+        <input class="h-11 border border-zinc-700 bg-zinc-950 px-3 text-zinc-50 outline-none transition focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" type="text" name="type" value="{{ form_values.type }}" required>
+      </label>
+      <label class="grid gap-2 text-sm font-medium text-zinc-300">
+        Status
+        <select class="h-11 border border-zinc-700 bg-zinc-950 px-3 text-zinc-50 outline-none transition focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" name="status" required>
+          {% for option in status_options %}
+          <option value="{{ option }}" {% if form_values.status == option %}selected{% endif %}>
+            {{ option }}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="inline-flex h-10 items-center justify-center border border-zinc-50 bg-zinc-50 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-50 focus:ring-offset-2 focus:ring-offset-zinc-950" type="submit">Create source</button>
+    </form>
+  </section>
 
-<section class="panel">
-  <div class="section-header">
-    <h2>Sources</h2>
-    <span class="result-count">{{ sources | length }} sources</span>
-  </div>
-  {% if sources %}
-  <table>
-    <thead>
-      <tr>
-        <th>Source</th>
-        <th>Name</th>
-        <th>Type</th>
-        <th>Status</th>
-        <th>Created at</th>
-        <th>Action</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for source in sources %}
-      <tr>
-        <td>{{ source.id }}</td>
-        <td>{{ source.name }}</td>
-        <td>{{ source.type }}</td>
-        <td><span class="status status-{{ source.status }}">{{ source.status }}</span></td>
-        <td>{{ source.created_at }}</td>
-        <td>
-          <form class="inline-form" action="/sources/{{ source.id }}/toggle" method="post">
-            <button type="submit">
-              {% if source.status == "active" %}Deactivate{% else %}Activate{% endif %}
-            </button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <p class="empty">No sources configured.</p>
-  {% endif %}
+  <section class="border border-zinc-800 bg-zinc-950">
+    <div class="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
+      <div>
+        <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Registry</p>
+        <h2 class="text-base font-semibold text-zinc-50">Sources</h2>
+      </div>
+      <span class="text-sm font-medium text-zinc-500">{{ sources | length }} sources</span>
+    </div>
+    {% if sources %}
+    <div class="w-full">
+      <table class="w-full table-fixed text-sm">
+        <thead class="bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500">
+          <tr>
+            <th class="w-[150px] px-3 py-3 text-left font-medium">Source</th>
+            <th class="px-3 py-3 text-left font-medium">Name</th>
+            <th class="hidden w-[110px] px-3 py-3 text-left font-medium md:table-cell">Type</th>
+            <th class="w-[96px] px-3 py-3 text-left font-medium">Status</th>
+            <th class="hidden w-[170px] px-3 py-3 text-left font-medium xl:table-cell">Created at</th>
+            <th class="w-[104px] px-3 py-3 text-left font-medium">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-zinc-900">
+          {% for source in sources %}
+          <tr class="text-zinc-300 hover:bg-zinc-900/70">
+            <td class="px-3 py-3"><span class="block truncate font-mono text-xs text-zinc-300" title="{{ source.id }}">{{ source.id }}</span></td>
+            <td class="min-w-0 px-3 py-3 font-medium text-zinc-50">
+              <span class="block truncate" title="{{ source.name }}">{{ source.name }}</span>
+              <span class="mt-1 block text-xs font-normal text-zinc-500 md:hidden">{{ source.type }}</span>
+            </td>
+            <td class="hidden min-w-0 break-words px-3 py-3 md:table-cell">{{ source.type }}</td>
+            <td class="px-3 py-3"><span class="status status-{{ source.status }}">{{ source.status }}</span></td>
+            <td class="hidden min-w-0 break-words px-3 py-3 font-mono text-xs xl:table-cell">{{ source.created_at }}</td>
+            <td class="px-3 py-3">
+              <form action="/sources/{{ source.id }}/toggle" method="post">
+                <button class="inline-flex h-8 max-w-full items-center justify-center border border-zinc-700 px-2 text-xs font-medium text-zinc-50 transition hover:border-zinc-50 hover:bg-zinc-900" type="submit">
+                  {% if source.status == "active" %}Deactivate{% else %}Activate{% endif %}
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="px-4 py-8 text-sm text-zinc-500">No sources configured.</p>
+    {% endif %}
+  </section>
 </section>
 {% endblock %}

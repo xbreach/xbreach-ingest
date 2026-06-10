@@ -1,21 +1,62 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="panel compact-panel">
-  {% if error_message %}
-  <div class="notice error" role="alert">{{ error_message }}</div>
-  {% endif %}
-  <form class="form" action="/login" method="post">
-    <input type="hidden" name="next" value="{{ next }}">
-    <label>
-      Email
-      <input type="email" name="email" autocomplete="email" required autofocus>
-    </label>
-    <label>
-      Password
-      <input type="password" name="password" autocomplete="current-password" required>
-    </label>
-    <button type="submit">Continue</button>
-  </form>
+<section class="mx-auto grid h-full w-full max-w-6xl items-stretch overflow-hidden border border-zinc-800 bg-zinc-950 md:grid-cols-[1.12fr_0.88fr]">
+  <div class="flex min-h-0 flex-col justify-between border-b border-zinc-800 p-4 md:border-b-0 md:border-r md:p-6 lg:p-7">
+    <div class="flex items-center justify-between gap-4">
+      <a class="flex items-center gap-3 text-zinc-50 no-underline" href="/login" aria-label="xbreach ingest login">
+        <span class="relative grid h-9 w-9 place-items-center overflow-hidden border border-zinc-700 bg-zinc-950 text-[10px] font-black uppercase text-zinc-950">
+          <img class="relative z-10 h-full w-full object-contain p-1" src="{{ url_for('static', path='/logo.svg') }}" alt="">
+        </span>
+        <span class="font-mono text-sm font-semibold">xbreach ingest</span>
+      </a>
+      <span class="hidden border border-zinc-800 px-2.5 py-1 font-mono text-xs font-medium uppercase tracking-wide text-zinc-500 sm:inline">Private console</span>
+    </div>
+
+    <div class="max-w-2xl">
+      <p class="mb-3 font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-zinc-500">Secure ingest console</p>
+      <h1 id="login-title" class="max-w-[10ch] text-4xl font-semibold leading-[0.92] tracking-tight text-zinc-50 sm:text-6xl lg:text-7xl">Breach data intake.</h1>
+      <p class="mt-4 max-w-xl text-sm leading-6 text-zinc-400 lg:text-base">A focused operational surface for uploads, source controls, queue review, and ingestion traceability.</p>
+    </div>
+
+    <div class="grid grid-cols-3 border border-zinc-800 font-mono text-[11px] text-zinc-500">
+      <div class="border-r border-zinc-800 p-3">
+        <span class="block font-medium text-zinc-300">01</span>
+        AUTH
+      </div>
+      <div class="border-r border-zinc-800 p-3">
+        <span class="block font-medium text-zinc-300">02</span>
+        INGEST
+      </div>
+      <div class="p-3">
+        <span class="block font-medium text-zinc-300">03</span>
+        TRACE
+      </div>
+    </div>
+  </div>
+
+  <section class="flex min-h-0 items-center p-4 md:p-6 lg:p-7" aria-label="Login form">
+    <div class="w-full">
+      <div class="mb-6">
+        <p class="font-mono text-xs font-medium uppercase tracking-wide text-zinc-500">Operator sign in</p>
+        <h2 class="mt-1 text-2xl font-semibold tracking-tight text-zinc-50">Access panel</h2>
+      </div>
+      {% if error_message %}
+      <div class="mb-4 border border-red-800 bg-red-950/60 px-3 py-2 text-sm font-medium text-red-200" role="alert">{{ error_message }}</div>
+      {% endif %}
+      <form class="grid gap-4" action="/login" method="post">
+        <input type="hidden" name="next" value="{{ next }}">
+        <label class="grid gap-2 text-sm font-medium text-zinc-300">
+          Email
+          <input class="h-11 border border-zinc-700 bg-zinc-950 px-3 font-mono text-sm text-zinc-50 outline-none transition placeholder:text-zinc-600 focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" type="email" name="email" autocomplete="email" placeholder="admin@xbreach.local" required autofocus>
+        </label>
+        <label class="grid gap-2 text-sm font-medium text-zinc-300">
+          Password
+          <input class="h-11 border border-zinc-700 bg-zinc-950 px-3 font-mono text-sm text-zinc-50 outline-none transition placeholder:text-zinc-600 focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" type="password" name="password" autocomplete="current-password" placeholder="Enter password" required>
+        </label>
+        <button class="mt-2 inline-flex h-11 items-center justify-center border border-zinc-50 bg-zinc-50 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-50 focus:ring-offset-2 focus:ring-offset-zinc-950" type="submit">Continue</button>
+      </form>
+    </div>
+  </section>
 </section>
 {% endblock %}

@@ -2,123 +2,131 @@
 
 {% block content %}
 {% if job %}
-<section class="panel job-progress-panel">
-  <div class="section-header">
-    <h2>Progress</h2>
+<section class="border border-zinc-800 bg-zinc-950 p-4">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Progress</p>
+      <h2 class="text-base font-semibold text-zinc-50">Job {{ job.id }}</h2>
+    </div>
     <span class="status status-{{ job.status }}">{{ job.status }}</span>
   </div>
-  <div class="progress-track" aria-label="Job progress">
-    <div class="progress-fill" style="width: {{ progress_percent }}%"></div>
+  <div class="mt-4 h-4 overflow-hidden border border-zinc-800 bg-zinc-900" aria-label="Job progress">
+    <div class="progress-fill h-full" style="width: {{ progress_percent }}%"></div>
   </div>
-  <div class="progress-meta">
+  <div class="mt-3 flex flex-wrap justify-between gap-2 text-sm font-medium text-zinc-500">
     <span>{{ progress_percent }}% processed</span>
     <span>{{ job.parsed_lines + job.rejected_lines }} / {{ job.total_lines }} lines</span>
   </div>
 </section>
 
-<section class="detail-grid">
-  <article class="panel">
-    <h2>Job details</h2>
-    <dl>
-      <dt>Job ID</dt>
-      <dd>{{ job.id }}</dd>
-      <dt>Source</dt>
-      <dd>{{ source.name if source else job.source_id }}</dd>
-      <dt>Breach</dt>
-      <dd>{{ breach.name if breach else job.breach_id or "None" }}</dd>
-      <dt>Status</dt>
-      <dd><span class="status status-{{ job.status }}">{{ job.status }}</span></dd>
-      <dt>Filename</dt>
-      <dd>{{ job.original_filename }}</dd>
-      <dt>Checksum</dt>
-      <dd>{{ job.checksum_sha256 }}</dd>
-      <dt>Path</dt>
-      <dd>{{ job.local_path }}</dd>
-      <dt>File size</dt>
-      <dd>{{ job.file_size_bytes }} bytes</dd>
-      <dt>Created at</dt>
-      <dd>{{ job.created_at }}</dd>
-      <dt>Started at</dt>
-      <dd>{{ job.started_at or "Not started" }}</dd>
-      <dt>Finished at</dt>
-      <dd>{{ job.finished_at or "Not finished" }}</dd>
+<section class="mt-4 grid gap-4 lg:grid-cols-2">
+  <article class="border border-zinc-800 bg-zinc-950 p-4">
+    <h2 class="text-base font-semibold text-zinc-50">Job details</h2>
+    <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-[150px_minmax(0,1fr)]">
+      <dt class="font-medium text-zinc-500">Job ID</dt>
+      <dd class="min-w-0 break-words text-zinc-300">{{ job.id }}</dd>
+      <dt class="font-medium text-zinc-500">Source</dt>
+      <dd class="min-w-0 break-words text-zinc-300">{{ source.name if source else job.source_id }}</dd>
+      <dt class="font-medium text-zinc-500">Breach</dt>
+      <dd class="min-w-0 break-words text-zinc-300">{{ breach.name if breach else job.breach_id or "None" }}</dd>
+      <dt class="font-medium text-zinc-500">Status</dt>
+      <dd class="min-w-0 break-words text-zinc-300"><span class="status status-{{ job.status }}">{{ job.status }}</span></dd>
+      <dt class="font-medium text-zinc-500">Filename</dt>
+      <dd class="min-w-0 break-words text-zinc-300">{{ job.original_filename }}</dd>
+      <dt class="font-medium text-zinc-500">Checksum</dt>
+      <dd class="min-w-0 break-words text-zinc-300">{{ job.checksum_sha256 }}</dd>
+      <dt class="font-medium text-zinc-500">Path</dt>
+      <dd class="min-w-0 break-words text-zinc-300">{{ job.local_path }}</dd>
+      <dt class="font-medium text-zinc-500">File size</dt>
+      <dd class="min-w-0 break-words text-zinc-300">{{ job.file_size_bytes }} bytes</dd>
+      <dt class="font-medium text-zinc-500">Created at</dt>
+      <dd class="min-w-0 break-words text-zinc-300">{{ job.created_at }}</dd>
+      <dt class="font-medium text-zinc-500">Started at</dt>
+      <dd class="min-w-0 break-words text-zinc-300">{{ job.started_at or "Not started" }}</dd>
+      <dt class="font-medium text-zinc-500">Finished at</dt>
+      <dd class="min-w-0 break-words text-zinc-300">{{ job.finished_at or "Not finished" }}</dd>
     </dl>
   </article>
-  <article class="panel">
-    <h2>Line counts</h2>
-    <dl>
-      <dt>Total lines</dt>
-      <dd>{{ job.total_lines }}</dd>
-      <dt>Parsed lines</dt>
-      <dd>{{ job.parsed_lines }}</dd>
-      <dt>Rejected lines</dt>
-      <dd>{{ job.rejected_lines }}</dd>
-      <dt>Inserted lines</dt>
-      <dd>{{ job.inserted_lines }}</dd>
+
+  <article class="border border-zinc-800 bg-zinc-950 p-4">
+    <h2 class="text-base font-semibold text-zinc-50">Line counts</h2>
+    <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-[150px_minmax(0,1fr)]">
+      <dt class="font-medium text-zinc-500">Total lines</dt>
+      <dd class="text-zinc-300">{{ job.total_lines }}</dd>
+      <dt class="font-medium text-zinc-500">Parsed lines</dt>
+      <dd class="text-zinc-300">{{ job.parsed_lines }}</dd>
+      <dt class="font-medium text-zinc-500">Rejected lines</dt>
+      <dd class="text-zinc-300">{{ job.rejected_lines }}</dd>
+      <dt class="font-medium text-zinc-500">Inserted lines</dt>
+      <dd class="text-zinc-300">{{ job.inserted_lines }}</dd>
     </dl>
   </article>
 </section>
 
-<section class="detail-grid">
-  <article class="panel">
-    <div class="section-header">
-      <h2>Error summary</h2>
-      <span class="result-count">{{ error_summary | length }} types</span>
+<section class="mt-4 grid gap-4 lg:grid-cols-2">
+  <article class="border border-zinc-800 bg-zinc-950">
+    <div class="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
+      <h2 class="text-base font-semibold text-zinc-50">Error summary</h2>
+      <span class="text-sm font-medium text-zinc-500">{{ error_summary | length }} types</span>
     </div>
     {% if error_summary %}
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for error_type, total in error_summary %}
-        <tr>
-          <td>{{ error_type }}</td>
-          <td>{{ total }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500">
+          <tr>
+            <th class="px-4 py-3 text-left font-medium">Type</th>
+            <th class="px-4 py-3 text-left font-medium">Total</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-zinc-900">
+          {% for error_type, total in error_summary %}
+          <tr class="text-zinc-300 hover:bg-zinc-900/70">
+            <td class="px-4 py-3">{{ error_type }}</td>
+            <td class="px-4 py-3">{{ total }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% else %}
-    <p class="empty">No job errors recorded.</p>
+    <p class="px-4 py-8 text-sm text-zinc-500">No job errors recorded.</p>
     {% endif %}
   </article>
 
-  <article class="panel">
-    <div class="section-header">
-      <h2>Latest failures</h2>
-      <span class="result-count">{{ recent_errors | length }} shown</span>
+  <article class="border border-zinc-800 bg-zinc-950">
+    <div class="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
+      <h2 class="text-base font-semibold text-zinc-50">Latest failures</h2>
+      <span class="text-sm font-medium text-zinc-500">{{ recent_errors | length }} shown</span>
     </div>
     {% if recent_errors %}
-    <table>
-      <thead>
-        <tr>
-          <th>Line</th>
-          <th>Type</th>
-          <th>Created</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for error in recent_errors %}
-        <tr>
-          <td>{{ error.line_number or "File" }}</td>
-          <td>{{ error.error_type }}</td>
-          <td>{{ error.created_at }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500">
+          <tr>
+            <th class="px-4 py-3 text-left font-medium">Line</th>
+            <th class="px-4 py-3 text-left font-medium">Type</th>
+            <th class="px-4 py-3 text-left font-medium">Created</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-zinc-900">
+          {% for error in recent_errors %}
+          <tr class="text-zinc-300 hover:bg-zinc-900/70">
+            <td class="px-4 py-3">{{ error.line_number or "File" }}</td>
+            <td class="px-4 py-3">{{ error.error_type }}</td>
+            <td class="px-4 py-3">{{ error.created_at }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% else %}
-    <p class="empty">No recent failures.</p>
+    <p class="px-4 py-8 text-sm text-zinc-500">No recent failures.</p>
     {% endif %}
   </article>
 </section>
 {% else %}
-<section class="panel">
-  <p class="empty">Job not found.</p>
+<section class="border border-zinc-800 bg-zinc-950 p-4">
+  <p class="text-sm text-zinc-500">Job not found.</p>
 </section>
 {% endif %}
 {% endblock %}

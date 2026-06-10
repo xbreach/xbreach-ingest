@@ -1,53 +1,58 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="summary-grid" aria-label="Dashboard summary">
-  <article class="metric">
-    <span>Sources</span>
-    <strong>{{ summary.sources }}</strong>
+<section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Dashboard summary">
+  <article class="border border-zinc-800 bg-zinc-950 p-4">
+    <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Sources</p>
+    <strong class="mt-4 block text-4xl font-semibold tracking-tight text-zinc-50">{{ summary.sources }}</strong>
   </article>
-  <article class="metric">
-    <span>Total jobs</span>
-    <strong>{{ summary.jobs }}</strong>
+  <article class="border border-zinc-800 bg-zinc-950 p-4">
+    <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Total jobs</p>
+    <strong class="mt-4 block text-4xl font-semibold tracking-tight text-zinc-50">{{ summary.jobs }}</strong>
   </article>
-  <article class="metric">
-    <span>Pending</span>
-    <strong>{{ summary.pending_jobs }}</strong>
+  <article class="border border-zinc-800 bg-zinc-950 p-4">
+    <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Pending</p>
+    <strong class="mt-4 block text-4xl font-semibold tracking-tight text-zinc-50">{{ summary.pending_jobs }}</strong>
   </article>
-  <article class="metric">
-    <span>Failed</span>
-    <strong>{{ summary.failed_jobs }}</strong>
+  <article class="border border-zinc-800 bg-zinc-950 p-4">
+    <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Failed</p>
+    <strong class="mt-4 block text-4xl font-semibold tracking-tight text-zinc-50">{{ summary.failed_jobs }}</strong>
   </article>
 </section>
 
-<section class="panel">
-  <div class="section-header">
-    <h2>Recent jobs</h2>
-    <a href="/jobs">View all</a>
+<section class="mt-4 border border-zinc-800 bg-zinc-950">
+  <div class="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
+    <div>
+      <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Queue</p>
+      <h2 class="text-base font-semibold text-zinc-50">Recent jobs</h2>
+    </div>
+    <a class="inline-flex h-9 items-center border border-zinc-700 px-3 text-sm font-medium text-zinc-50 no-underline transition hover:border-zinc-50 hover:bg-zinc-900" href="/jobs">View all</a>
   </div>
   {% if recent_jobs %}
-  <table>
-    <thead>
-      <tr>
-        <th>Job</th>
-        <th>Filename</th>
-        <th>Status</th>
-        <th>Size</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for job in recent_jobs %}
-      <tr>
-        <td><a href="/jobs/{{ job.id }}">{{ job.id }}</a></td>
-        <td>{{ job.original_filename }}</td>
-        <td><span class="status">{{ job.status }}</span></td>
-        <td>{{ job.file_size_bytes }} bytes</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="w-full">
+    <table class="w-full table-fixed text-sm">
+      <thead class="bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500">
+        <tr>
+          <th class="w-[150px] px-3 py-3 text-left font-medium">Job</th>
+          <th class="px-3 py-3 text-left font-medium">Filename</th>
+          <th class="w-[98px] px-3 py-3 text-left font-medium">Status</th>
+          <th class="hidden w-[96px] px-3 py-3 text-left font-medium md:table-cell">Size</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-zinc-900">
+        {% for job in recent_jobs %}
+        <tr class="text-zinc-300 hover:bg-zinc-900/70">
+          <td class="px-3 py-3"><a class="block truncate font-mono text-xs font-medium text-zinc-50 underline underline-offset-4" href="/jobs/{{ job.id }}" title="{{ job.id }}">{{ job.id }}</a></td>
+          <td class="min-w-0 break-all px-3 py-3">{{ job.original_filename }}</td>
+          <td class="px-3 py-3"><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
+          <td class="hidden px-3 py-3 text-xs md:table-cell">{{ job.file_size_bytes }} bytes</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}
-  <p class="empty">No ingestion jobs yet.</p>
+  <p class="px-4 py-8 text-sm text-zinc-500">No ingestion jobs yet.</p>
   {% endif %}
 </section>
 {% endblock %}

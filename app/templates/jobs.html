@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="panel filters-panel">
-  <form class="filters-form" action="/jobs" method="get">
-    <label>
+<section class="border border-zinc-800 bg-zinc-950">
+  <form class="grid gap-3 p-4 md:grid-cols-6 md:items-end" action="/jobs" method="get">
+    <label class="grid gap-2 text-sm font-medium text-zinc-300">
       Status
-      <select name="status">
+      <select class="h-10 border border-zinc-700 bg-zinc-950 px-3 text-zinc-50 outline-none transition focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" name="status">
         <option value="">All statuses</option>
         {% for option in status_options %}
         <option value="{{ option }}" {% if filters.status == option %}selected{% endif %}>
@@ -14,9 +14,9 @@
         {% endfor %}
       </select>
     </label>
-    <label>
+    <label class="grid gap-2 text-sm font-medium text-zinc-300">
       Source
-      <select name="source_id">
+      <select class="h-10 border border-zinc-700 bg-zinc-950 px-3 text-zinc-50 outline-none transition focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" name="source_id">
         <option value="">All sources</option>
         {% for source in sources %}
         <option value="{{ source.id }}" {% if filters.source_id == source.id %}selected{% endif %}>
@@ -25,78 +25,87 @@
         {% endfor %}
       </select>
     </label>
-    <label>
+    <label class="grid gap-2 text-sm font-medium text-zinc-300">
       From
-      <input type="date" name="date_from" value="{{ filters.date_from or '' }}">
+      <input class="h-10 border border-zinc-700 bg-zinc-950 px-3 text-zinc-50 outline-none transition focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" type="date" name="date_from" value="{{ filters.date_from or '' }}">
     </label>
-    <label>
+    <label class="grid gap-2 text-sm font-medium text-zinc-300">
       To
-      <input type="date" name="date_to" value="{{ filters.date_to or '' }}">
+      <input class="h-10 border border-zinc-700 bg-zinc-950 px-3 text-zinc-50 outline-none transition focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" type="date" name="date_to" value="{{ filters.date_to or '' }}">
     </label>
-    <label>
+    <label class="grid gap-2 text-sm font-medium text-zinc-300">
       Filename
-      <input type="search" name="filename" value="{{ filters.filename or '' }}">
+      <input class="h-10 border border-zinc-700 bg-zinc-950 px-3 text-zinc-50 outline-none transition placeholder:text-zinc-600 focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" type="search" name="filename" value="{{ filters.filename or '' }}">
     </label>
-    <div class="filter-actions">
-      <button type="submit">Apply</button>
-      <a class="secondary-action" href="/jobs">Clear</a>
+    <div class="flex gap-2">
+      <button class="inline-flex h-10 flex-1 items-center justify-center border border-zinc-50 bg-zinc-50 px-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-50 focus:ring-offset-2 focus:ring-offset-zinc-950" type="submit">Apply</button>
+      <a class="inline-flex h-10 flex-1 items-center justify-center border border-zinc-700 px-3 text-sm font-medium text-zinc-50 no-underline transition hover:border-zinc-50 hover:bg-zinc-900" href="/jobs">Clear</a>
     </div>
   </form>
 </section>
 
-<section class="panel">
-  <div class="section-header">
-    <h2>Job listing</h2>
-    <span class="result-count">{{ total_jobs }} jobs</span>
+<section class="mt-4 border border-zinc-800 bg-zinc-950">
+  <div class="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
+    <div>
+      <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Registry</p>
+      <h2 class="text-base font-semibold text-zinc-50">Job listing</h2>
+    </div>
+    <span class="text-sm font-medium text-zinc-500">{{ total_jobs }} jobs</span>
   </div>
   {% if jobs %}
-  <table>
-    <thead>
-      <tr>
-        <th>Job ID</th>
-        <th>Source</th>
-        <th>Filename</th>
-        <th>Status</th>
-        <th>File size</th>
-        <th>Parsed</th>
-        <th>Rejected</th>
-        <th>Inserted</th>
-        <th>Created</th>
-        <th>Updated</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for job in jobs %}
-      <tr>
-        <td><a href="/jobs/{{ job.id }}">{{ job.id }}</a></td>
-        <td>{{ source_names.get(job.source_id, job.source_id) }}</td>
-        <td>{{ job.original_filename }}</td>
-        <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
-        <td>{{ job.file_size_bytes }} bytes</td>
-        <td>{{ job.parsed_lines }}</td>
-        <td>{{ job.rejected_lines }}</td>
-        <td>{{ job.inserted_lines }}</td>
-        <td>{{ job.created_at }}</td>
-        <td>{{ job.updated_at }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <nav class="pagination" aria-label="Job pages">
+  <div class="w-full">
+    <table class="w-full table-fixed text-sm">
+      <thead class="bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500">
+        <tr>
+          <th class="w-[150px] px-3 py-3 text-left font-medium">Job ID</th>
+          <th class="hidden w-[15%] px-3 py-3 text-left font-medium md:table-cell">Source</th>
+          <th class="px-3 py-3 text-left font-medium">Filename</th>
+          <th class="w-[98px] px-3 py-3 text-left font-medium">Status</th>
+          <th class="hidden w-[96px] px-3 py-3 text-left font-medium lg:table-cell">File size</th>
+          <th class="hidden w-[76px] px-3 py-3 text-left font-medium xl:table-cell">Parsed</th>
+          <th class="hidden w-[82px] px-3 py-3 text-left font-medium xl:table-cell">Rejected</th>
+          <th class="hidden w-[82px] px-3 py-3 text-left font-medium xl:table-cell">Inserted</th>
+          <th class="hidden w-[150px] px-3 py-3 text-left font-medium 2xl:table-cell">Created</th>
+          <th class="hidden w-[150px] px-3 py-3 text-left font-medium 2xl:table-cell">Updated</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-zinc-900">
+        {% for job in jobs %}
+        <tr class="text-zinc-300 hover:bg-zinc-900/70">
+          <td class="px-3 py-3"><a class="block truncate font-mono text-xs font-medium text-zinc-50 underline underline-offset-4" href="/jobs/{{ job.id }}" title="{{ job.id }}">{{ job.id }}</a></td>
+          <td class="hidden min-w-0 break-words px-3 py-3 md:table-cell">{{ source_names.get(job.source_id, job.source_id) }}</td>
+          <td class="min-w-0 break-all px-3 py-3">
+            <span class="block text-zinc-300">{{ job.original_filename }}</span>
+            <span class="mt-1 block text-xs text-zinc-500 md:hidden">{{ source_names.get(job.source_id, job.source_id) }}</span>
+            <span class="mt-1 block text-xs text-zinc-500 lg:hidden">{{ job.file_size_bytes }} bytes</span>
+          </td>
+          <td class="px-3 py-3"><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
+          <td class="hidden px-3 py-3 text-xs lg:table-cell">{{ job.file_size_bytes }} bytes</td>
+          <td class="hidden px-3 py-3 font-mono text-xs xl:table-cell">{{ job.parsed_lines }}</td>
+          <td class="hidden px-3 py-3 font-mono text-xs xl:table-cell">{{ job.rejected_lines }}</td>
+          <td class="hidden px-3 py-3 font-mono text-xs xl:table-cell">{{ job.inserted_lines }}</td>
+          <td class="hidden min-w-0 break-words px-3 py-3 font-mono text-xs 2xl:table-cell">{{ job.created_at }}</td>
+          <td class="hidden min-w-0 break-words px-3 py-3 font-mono text-xs 2xl:table-cell">{{ job.updated_at }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <nav class="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-800 px-4 py-3 text-sm text-zinc-500" aria-label="Job pages">
     {% if previous_page_url %}
-    <a class="secondary-action" href="{{ previous_page_url }}">Previous</a>
+    <a class="inline-flex h-9 items-center border border-zinc-700 px-3 font-medium text-zinc-50 no-underline transition hover:border-zinc-50 hover:bg-zinc-900" href="{{ previous_page_url }}">Previous</a>
     {% else %}
-    <span class="secondary-action disabled">Previous</span>
+    <span class="inline-flex h-9 items-center border border-zinc-800 px-3 font-medium text-zinc-600">Previous</span>
     {% endif %}
     <span>Page {{ page }} of {{ total_pages }}</span>
     {% if next_page_url %}
-    <a class="secondary-action" href="{{ next_page_url }}">Next</a>
+    <a class="inline-flex h-9 items-center border border-zinc-700 px-3 font-medium text-zinc-50 no-underline transition hover:border-zinc-50 hover:bg-zinc-900" href="{{ next_page_url }}">Next</a>
     {% else %}
-    <span class="secondary-action disabled">Next</span>
+    <span class="inline-flex h-9 items-center border border-zinc-800 px-3 font-medium text-zinc-600">Next</span>
     {% endif %}
   </nav>
   {% else %}
-  <p class="empty">No ingestion jobs yet.</p>
+  <p class="px-4 py-8 text-sm text-zinc-500">No ingestion jobs yet.</p>
   {% endif %}
 </section>
 {% endblock %}
