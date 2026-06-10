@@ -1,48 +1,100 @@
-# xbreach-ingest
+# xbreach ingest
 
-API de ingestao baseada em FastAPI.
+xbreach ingest é o serviço responsável por receber, validar e registrar arquivos
+brutos de vazamentos dentro da plataforma xbreach. Ele combina uma API FastAPI,
+uma interface operacional para uso interno, persistência em PostgreSQL, Redis
+para suporte de infraestrutura e armazenamento local dos arquivos recebidos.
 
-## Requisitos
+A aplicação foi pensada para manter o fluxo de ingestão rastreável. Cada upload
+fica vinculado a uma fonte, a um breach e a um job de processamento, permitindo
+acompanhar o histórico, consultar falhas e preservar os metadados necessários
+para auditoria.
 
-- Python 3.11+
-- Docker e Docker Compose
+## O que o projeto entrega
 
-## Estrutura
+1. Interface web privada com dashboard, listagem de jobs, detalhe de job,
+   upload de arquivos e controle de fontes.
+2. API autenticada para clientes externos enviarem arquivos de ingestão.
+3. Validação de extensão, tamanho, fonte ativa e nome seguro de arquivo.
+4. Registro de jobs, erros de ingestão e progresso em banco relacional.
+5. Healthcheck com estado da aplicação, PostgreSQL e Redis.
+6. Execução local via Docker Compose com migrations aplicadas na inicialização.
 
-```text
-xbreach-ingest/
-├── app/
-│   ├── main.py
-│   ├── api/
-│   ├── core/
-│   ├── domain/
-│   ├── services/
-│   ├── repositories/
-│   ├── infrastructure/
-│   └── schemas/
-├── tests/
-├── storage/
-├── docker/
-├── migrations/
-├── pyproject.toml
-├── Dockerfile
-├── docker-compose.yml
-└── README.md
+## Primeiros passos
+
+Para subir o ambiente completo localmente, use Docker Compose:
+
+```bash
+docker compose up --build
 ```
 
-## Variaveis de ambiente
+Depois que os serviços estiverem prontos, acesse:
 
-A aplicacao carrega variaveis do arquivo `.env` usando o prefixo `XBREACH_`.
-Use `.env.example` como referencia.
+```text
+http://localhost:8000/login
+```
+
+As credenciais padrão do ambiente local são:
+
+```text
+Email: admin@xbreach.local
+Senha: xbreach
+```
+
+Esses valores devem ser trocados em qualquer ambiente compartilhado.
+
+## Interface web
+
+A interface web fica protegida por login e foi feita para operação diária. Ela
+permite revisar o volume de jobs, acompanhar uploads recentes, filtrar jobs por
+status, fonte, data e nome de arquivo, consultar detalhes de processamento e
+administrar fontes ativas ou inativas.
+
+Rotas principais:
+
+```text
+/dashboard
+/jobs
+/jobs/{job_id}
+/upload
+/sources
+```
+
+## API para integração
+
+Clientes externos podem obter um token com:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@xbreach.local","password":"xbreach"}'
+```
+
+A resposta inclui `access_token`, `token_type` e `expires_in`. Use o token como
+Bearer nas chamadas autenticadas:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/ingest/upload \
+  -H "Authorization: Bearer <access_token>" \
+  -F "source_id=2001" \
+  -F "breach_name=Example breach" \
+  -F "file=@./sample.txt"
+```
+
+O endpoint de upload aceita arquivos com extensões permitidas pelo serviço e
+retorna o `job_id` criado, além do caminho local onde o arquivo foi armazenado.
+
+## Configuração
+
+A aplicação lê variáveis de ambiente com o prefixo `XBREACH_`. No Docker Compose,
+os valores podem vir de um arquivo `.env` ou dos padrões definidos no próprio
+`docker-compose.yml`.
+
+Variáveis mais importantes:
 
 ```env
-XBREACH_APP_NAME=xbreach-ingest
-XBREACH_APP_VERSION=0.1.0
 XBREACH_ENVIRONMENT=local
-XBREACH_LOG_LEVEL=INFO
 XBREACH_DATA_PATH=/data/xbreach
-XBREACH_APP_ID=1
-XBREACH_NODE_ID=1
 XBREACH_UPLOAD_MAX_FILE_SIZE_BYTES=104857600
 XBREACH_LOGIN_EMAIL=admin@xbreach.local
 XBREACH_LOGIN_PASSWORD=xbreach
@@ -58,40 +110,60 @@ XBREACH_REDIS_PORT=6379
 XBREACH_REDIS_DB=0
 ```
 
-`XBREACH_LOGIN_EMAIL` e `XBREACH_LOGIN_PASSWORD` definem o usuario unico de
-acesso para a interface web e para a API. Troque `XBREACH_SESSION_SECRET` em
-ambientes compartilhados ou de producao, pois ela assina os tokens JWT.
+`XBREACH_SESSION_SECRET` assina os tokens JWT. Em qualquer ambiente real, use um
+valor próprio, longo e privado.
 
-## Autenticacao
+## Armazenamento
 
-O login web em `/login` grava um cookie `HttpOnly` com JWT. Esse mesmo cookie
-autoriza chamadas para a API feitas pelo navegador.
+Uploads locais são gravados abaixo de `XBREACH_DATA_PATH`, seguindo uma estrutura
+por data e job:
 
-Clientes externos podem obter um token com:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@xbreach.local","password":"xbreach"}'
+```text
+/data/xbreach/raw/year=YYYY/month=MM/day=DD/{job_id}/
 ```
 
-Use o `access_token` retornado nas chamadas API:
+Dentro da pasta do job, o serviço mantém o arquivo original normalizado e um
+`manifest.json` com metadados do upload.
+
+## Banco de dados
+
+As migrations ficam em `migrations/` e podem ser executadas manualmente com:
 
 ```bash
-curl http://localhost:8000/api/v1/ingest/upload \
-  -H "Authorization: Bearer <access_token>"
+python -m app.infrastructure.migrations
 ```
 
-## Executar localmente
+No Docker Compose, a API executa as migrations antes de iniciar o Uvicorn.
+
+As principais tabelas são:
+
+```text
+sources
+breaches
+ingestion_jobs
+ingestion_job_errors
+```
+
+Os identificadores são `BIGINT` e são gerados pela aplicação com o gerador
+Snowflake configurado por `XBREACH_APP_ID` e `XBREACH_NODE_ID`.
+
+## Desenvolvimento local sem Docker
+
+Para rodar a aplicação diretamente no Python:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+python -m app.infrastructure.migrations
 uvicorn app.main:app --reload
 ```
 
-A API ficara disponivel em `http://localhost:8000`.
+A API ficará disponível em:
+
+```text
+http://localhost:8000
+```
 
 ## Healthcheck
 
@@ -99,7 +171,7 @@ A API ficara disponivel em `http://localhost:8000`.
 curl http://localhost:8000/health
 ```
 
-Resposta esperada:
+Resposta esperada em um ambiente saudável:
 
 ```json
 {
@@ -111,54 +183,24 @@ Resposta esperada:
 }
 ```
 
-## Docker Compose
-
-```bash
-docker compose up --build
-```
-
-O Docker Compose usa o `.env` automaticamente quando o arquivo existir e aplica
-valores padrao quando ele nao existir.
-
-O Compose sobe tres servicos na network interna `xbreach-internal`:
-
-- `api`: aplicacao FastAPI exposta em `localhost:8000`, com arquivos em `/data/xbreach`
-- `postgres`: PostgreSQL 16 com dados persistidos em `/data/xbreach/postgres`
-- `redis`: Redis 7 com AOF persistido em `/data/xbreach/redis`
-
-Uploads locais sao salvos em `/data/xbreach/raw/year=YYYY/month=MM/day=DD/{job_id}/`
-com o arquivo `original.<ext>` e o `manifest.json`.
-
-## Banco de dados
-
-As migrations ficam em `migrations/` e sao aplicadas com:
-
-```bash
-python -m app.infrastructure.migrations
-```
-
-No Docker Compose, a API executa as migrations antes de iniciar o Uvicorn.
-
-A primeira migration cria:
-
-- `sources`
-- `breaches`
-- `ingestion_jobs`
-- `ingestion_job_errors`
-
-Os IDs das tabelas sao `BIGINT` e devem ser gerados pela aplicacao com o
-snowflake comum. O snowflake carrega `XBREACH_APP_ID` e `XBREACH_NODE_ID`; o
-`APP_ID` identifica o tipo de aplicacao que inseriu o dado. Status de sources e
-jobs sao padronizados por constraints no PostgreSQL.
-
 ## Testes
 
 ```bash
 pytest
 ```
 
-## CI
+A pipeline de CI instala as dependências de desenvolvimento, executa a suíte de
+testes, aplica migrations, sobe a aplicação com Uvicorn e valida o endpoint
+`/health`.
 
-O workflow de CI instala as dependencias de desenvolvimento, executa `pytest`,
-sobe a aplicacao com Uvicorn e valida se `GET /health` responde com
-`{"status":"ok"}`.
+## Dicas úteis
+
+1. Clientes externos podem obter um token em `/api/v1/auth/login` e reutilizar o
+   `access_token` como Bearer até o tempo definido por
+   `XBREACH_SESSION_MAX_AGE_SECONDS`.
+2. Antes de enviar arquivos grandes, confirme o valor de
+   `XBREACH_UPLOAD_MAX_FILE_SIZE_BYTES`. O padrão atual é 100 MB, mas ele pode
+   ser sobrescrito por variável de ambiente.
+3. Para uma fonte aparecer no fluxo de upload, ela precisa estar cadastrada e
+   ativa. Fontes inativas ou desabilitadas são bloqueadas pela validação do
+   serviço.
