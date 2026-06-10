@@ -1,38 +1,48 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="panel compact-panel">
-  {% if error_message %}
-  <div class="notice error" role="alert">{{ error_message }}</div>
-  {% endif %}
-  {% if job_id %}
-  <div class="notice success" role="status">Upload created job {{ job_id }}.</div>
-  {% endif %}
-  <form class="form" action="/upload" method="post" enctype="multipart/form-data">
-    <label>
-      Source
-      <select name="source_id" required>
-        <option value="">Select source</option>
-        {% for source in sources %}
-        <option value="{{ source.id }}" {% if selected_source_id == source.id %}selected{% endif %}>
-          {{ source.name }} ({{ source.status }})
-        </option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>
-      Breach name
-      <input type="text" name="breach_name" value="{{ breach_name }}" required>
-    </label>
-    <label>
-      Collected at
-      <input type="datetime-local" name="collected_at" value="{{ collected_at }}">
-    </label>
-    <label>
-      File
-      <input type="file" name="file" accept=".txt,.csv,.gz,.zst" required>
-    </label>
-    <button type="submit">Upload</button>
-  </form>
+<section class="grid gap-4 lg:grid-cols-[0.72fr_1fr]">
+  <div class="border border-zinc-800 bg-zinc-950 p-5">
+    <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Upload</p>
+    <h2 class="mt-1 text-2xl font-semibold tracking-tight text-zinc-50">Create an ingestion job</h2>
+    <p class="mt-3 text-sm leading-6 text-zinc-400">Select a source, identify the breach, and attach the raw file. The job will enter the processing queue after validation.</p>
+  </div>
+
+  <section class="border border-zinc-800 bg-zinc-950 p-5">
+    {% if error_message %}
+    <div class="mb-4 border border-red-800 bg-red-950/60 px-3 py-2 text-sm font-medium text-red-200" role="alert">{{ error_message }}</div>
+    {% endif %}
+    {% if job_id %}
+    <div class="mb-4 border border-emerald-800 bg-emerald-950/60 px-3 py-2 text-sm font-medium text-emerald-200" role="status">Upload created job {{ job_id }}.</div>
+    {% endif %}
+    <form class="grid gap-4" action="/upload" method="post" enctype="multipart/form-data">
+      <label class="grid gap-2 text-sm font-medium text-zinc-300">
+        Source
+        <select name="source_id" class="h-11 border border-zinc-700 bg-zinc-950 px-3 text-zinc-50 outline-none transition focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" required>
+          <option value="">Select source</option>
+          {% for source in sources %}
+          <option value="{{ source.id }}" {% if selected_source_id == source.id %}selected{% endif %}>
+            {{ source.name }} ({{ source.status }})
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="grid gap-2 text-sm font-medium text-zinc-300">
+        Breach name
+        <input class="h-11 border border-zinc-700 bg-zinc-950 px-3 text-zinc-50 outline-none transition focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" type="text" name="breach_name" value="{{ breach_name }}" required>
+      </label>
+      <label class="grid gap-2 text-sm font-medium text-zinc-300">
+        Collected at
+        <input class="h-11 border border-zinc-700 bg-zinc-950 px-3 text-zinc-50 outline-none transition focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" type="datetime-local" name="collected_at" value="{{ collected_at }}">
+      </label>
+      <label class="grid gap-2 text-sm font-medium text-zinc-300">
+        File
+        <input type="file" name="file" class="min-h-11 border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-50 outline-none transition file:mr-3 file:border file:border-zinc-700 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-zinc-50 focus:border-zinc-50 focus:ring-2 focus:ring-zinc-50/20" accept=".txt,.csv,.gz,.zst" required>
+      </label>
+      <div class="flex justify-end border-t border-zinc-800 pt-4">
+        <button class="inline-flex h-10 items-center justify-center border border-zinc-50 bg-zinc-50 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-50 focus:ring-offset-2 focus:ring-offset-zinc-950" type="submit">Upload</button>
+      </div>
+    </form>
+  </section>
 </section>
 {% endblock %}

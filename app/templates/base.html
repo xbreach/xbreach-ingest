@@ -1,70 +1,87 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" class="dark">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ page_title }} - xbreach ingest</title>
     <script>
-      (function () {
-        var savedTheme = localStorage.getItem("xbreach-theme");
-        var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-        document.documentElement.dataset.theme = savedTheme || (prefersDark ? "dark" : "light");
-      })();
+      tailwind = {
+        config: {
+          darkMode: "class",
+          theme: {
+            extend: {
+              fontFamily: {
+                sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+                mono: ["Fira Code", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+              },
+            },
+          },
+        },
+      };
     </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="{{ url_for('static', path='/web.css') }}">
   </head>
-  <body>
-    <aside class="sidebar">
-      <a class="brand" href="/dashboard">
-        <span class="brand-mark" aria-hidden="true">xb</span>
-        <span>xbreach ingest</span>
-      </a>
-      {% if is_authenticated %}
-      <nav class="nav" aria-label="Primary">
-        <a href="/dashboard" {% if request.url.path == "/dashboard" %}aria-current="page"{% endif %}>Dashboard</a>
-        <a href="/jobs" {% if request.url.path.startswith("/jobs") %}aria-current="page"{% endif %}>Jobs</a>
-        <a href="/upload" {% if request.url.path == "/upload" %}aria-current="page"{% endif %}>Upload</a>
-        <a href="/sources" {% if request.url.path == "/sources" %}aria-current="page"{% endif %}>Sources</a>
-      </nav>
-      {% endif %}
-    </aside>
-    <main class="page">
-      <header class="page-header">
-        <div>
-          <p class="eyebrow">Ingestion console</p>
-          <h1>{{ page_title }}</h1>
-        </div>
-        <div class="page-actions">
-          <button class="secondary-action theme-toggle" type="button" data-theme-toggle aria-label="Toggle color theme">
-            <span data-theme-label>Theme</span>
-          </button>
+  <body class="min-h-screen bg-zinc-950 text-zinc-50 antialiased">
+    {% set is_login_page = request.url.path == "/login" %}
+    {% if not is_login_page %}
+    <div class="min-h-screen lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
+      <aside class="border-b border-zinc-800 bg-zinc-950 lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
+        <div class="flex h-full flex-col gap-6 p-4">
+          <a class="flex h-12 items-center gap-3 border border-zinc-700 bg-zinc-950 px-3 text-sm font-semibold tracking-tight text-zinc-50 no-underline transition hover:border-zinc-400" href="/dashboard">
+            <span class="relative grid h-8 w-8 place-items-center overflow-hidden border border-zinc-700 bg-zinc-950 text-[10px] font-black uppercase text-zinc-950" aria-hidden="true">
+              <img class="relative z-10 h-full w-full object-contain p-1" src="{{ url_for('static', path='/logo.svg') }}" alt="">
+            </span>
+            <span class="truncate font-mono">xbreach ingest</span>
+          </a>
           {% if is_authenticated %}
-          <form class="inline-form" action="/logout" method="post">
-            <button class="secondary-action" type="submit">Logout</button>
-          </form>
-          {% elif request.url.path != "/login" %}
-          <a class="secondary-action" href="/login">Login</a>
+          <nav class="grid gap-1" aria-label="Primary">
+            <a class="flex h-10 items-center border px-3 text-sm font-medium no-underline transition {% if request.url.path == '/dashboard' %}border-zinc-50 bg-zinc-50 text-zinc-950{% else %}border-transparent text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-50{% endif %}" href="/dashboard" {% if request.url.path == "/dashboard" %}aria-current="page"{% endif %}><span class="mr-3 font-mono text-xs opacity-60">01</span>Dashboard</a>
+            <a class="flex h-10 items-center border px-3 text-sm font-medium no-underline transition {% if request.url.path.startswith('/jobs') %}border-zinc-50 bg-zinc-50 text-zinc-950{% else %}border-transparent text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-50{% endif %}" href="/jobs" {% if request.url.path.startswith("/jobs") %}aria-current="page"{% endif %}><span class="mr-3 font-mono text-xs opacity-60">02</span>Jobs</a>
+            <a class="flex h-10 items-center border px-3 text-sm font-medium no-underline transition {% if request.url.path == '/upload' %}border-zinc-50 bg-zinc-50 text-zinc-950{% else %}border-transparent text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-50{% endif %}" href="/upload" {% if request.url.path == "/upload" %}aria-current="page"{% endif %}><span class="mr-3 font-mono text-xs opacity-60">03</span>Upload</a>
+            <a class="flex h-10 items-center border px-3 text-sm font-medium no-underline transition {% if request.url.path == '/sources' %}border-zinc-50 bg-zinc-50 text-zinc-950{% else %}border-transparent text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-50{% endif %}" href="/sources" {% if request.url.path == "/sources" %}aria-current="page"{% endif %}><span class="mr-3 font-mono text-xs opacity-60">04</span>Sources</a>
+          </nav>
           {% endif %}
+          <div class="mt-auto hidden border-t border-zinc-800 pt-4 text-xs leading-5 text-zinc-500 lg:block">
+            <p class="font-medium uppercase tracking-wide text-zinc-400">Console</p>
+            <p>Focused ingestion workspace with source, upload, and job trace controls.</p>
+          </div>
         </div>
-      </header>
-      {% block content %}{% endblock %}
+      </aside>
+
+      <main class="min-w-0">
+        <header class="sticky top-0 z-20 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
+          <div class="mx-auto flex min-h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+            <div class="min-w-0">
+              <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Ingestion console</p>
+              <h1 class="truncate text-xl font-semibold tracking-tight text-zinc-50 sm:text-2xl">{{ page_title }}</h1>
+            </div>
+            <div class="flex items-center justify-end gap-2">
+              {% if is_authenticated %}
+              <span class="hidden max-w-64 truncate border border-zinc-800 px-3 py-2 font-mono text-xs text-zinc-400 sm:inline">{{ authenticated_email }}</span>
+              <form action="/logout" method="post">
+                <button class="inline-flex h-9 items-center justify-center border border-zinc-700 bg-zinc-950 px-3 text-sm font-medium text-zinc-50 transition hover:border-zinc-50 hover:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-50 focus:ring-offset-2 focus:ring-offset-zinc-950" type="submit">Logout</button>
+              </form>
+              {% else %}
+              <a class="inline-flex h-9 items-center justify-center border border-zinc-50 bg-zinc-50 px-3 text-sm font-medium text-zinc-950 no-underline transition hover:bg-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-50 focus:ring-offset-2 focus:ring-offset-zinc-950" href="/login">Login</a>
+              {% endif %}
+            </div>
+          </div>
+        </header>
+        <div class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    {% else %}
+    <main class="h-screen overflow-hidden p-3 sm:p-4 lg:p-5">
+    {% endif %}
+          {% block content %}{% endblock %}
+    {% if not is_login_page %}
+        </div>
+      </main>
+    </div>
+    {% else %}
     </main>
-    <script>
-      (function () {
-        var button = document.querySelector("[data-theme-toggle]");
-        var label = document.querySelector("[data-theme-label]");
-        function syncLabel() {
-          var theme = document.documentElement.dataset.theme || "light";
-          label.textContent = theme === "dark" ? "Light mode" : "Dark mode";
-        }
-        button.addEventListener("click", function () {
-          var nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-          document.documentElement.dataset.theme = nextTheme;
-          localStorage.setItem("xbreach-theme", nextTheme);
-          syncLabel();
-        });
-        syncLabel();
-      })();
-    </script>
+    {% endif %}
   </body>
 </html>
